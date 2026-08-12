@@ -721,6 +721,12 @@ class OliveAttendancePunch(models.Model):
                 pair["attendance"] = attendance
                 continue
             pair["previous"] = attendance
+            # El contador se lee AHORA, no en el create: para entonces el
+            # registro viejo ya fue borrado —el orden borrar-antes-de-crear es
+            # necesario para no chocar con las restricciones del core— y leerle
+            # un campo lanza MissingError.
+            pair["rebuilt_count"] = (
+                attendance.olive_rebuilt_count + 1) if attendance else 0
             to_create.append(pair)
 
         # Conflicto con bloque inmutable: no se escribe nada de ese par. El
@@ -754,8 +760,8 @@ class OliveAttendancePunch(models.Model):
                 "check_out": pair["check_out"],
                 "olive_anomaly": pair["anomaly"],
             }
-            if pair.get("previous"):
-                values["olive_rebuilt_count"] = pair["previous"].olive_rebuilt_count + 1
+            if pair.get("rebuilt_count"):
+                values["olive_rebuilt_count"] = pair["rebuilt_count"]
             attendance = Attendance.create(values)
             pair["attendance"] = attendance
 
