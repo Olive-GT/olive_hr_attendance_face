@@ -7,7 +7,7 @@
 // puede identificar al usuario": aqui se ve el numero, en vivo, antes de
 // depender del kiosco.
 
-import { Component, onMounted, onWillUnmount, useRef, useState } from "@odoo/owl";
+import { Component, onMounted, onWillUnmount, useEffect, useRef, useState } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
@@ -90,6 +90,18 @@ export class FaceVerify extends Component {
         this.conditions = CONDITIONS;
         this.running = false;
 
+        // El <video> solo esta en el DOM cuando la fase es "ready", asi que el
+        // stream no se puede enganchar dentro de start(): en ese momento el ref
+        // todavia es null. Este efecto lo hace en cuanto el elemento aparece.
+        useEffect(
+            (el) => {
+                if (el && this.stream && el.srcObject !== this.stream) {
+                    this.attachStream(el);
+                }
+            },
+            () => [this.videoRef.el]
+        );
+
         onMounted(() => this.start());
         onWillUnmount(() => this.stop());
     }
@@ -134,15 +146,32 @@ export class FaceVerify extends Component {
                 this.state.cameraError = true;
                 throw new Error(this.cameraErrorText(camErr));
             }
-            this.videoRef.el.srcObject = this.stream;
-            await this.videoRef.el.play();
-
+            // Mostrar la pantalla es lo que crea el <video>; el efecto de
+            // setup() engancha el stream apenas exista.
             this.state.phase = "ready";
-            this.running = true;
-            this.loop();
         } catch (err) {
             this.state.phase = "error";
             this.state.error = errorText(err);
+        }
+    }
+
+    /** Conecta la camara al <video> y arranca el bucle de deteccion. */
+    async attachStream(el) {
+        el.srcObject = this.stream;
+        try {
+            await el.play();
+        } catch (err) {
+            // Reproducir puede fallar por politicas de autoplay; el video va
+            // muted y playsinline justamente para evitarlo, pero si igual pasa
+            // hay que decirlo en vez de dejar un cuadro negro.
+            this.state.phase = "error";
+            this.state.error = _t("La camara abrio pero el video no arranco: %s",
+                                  errorText(err));
+            return;
+        }
+        if (!this.running) {
+            this.running = true;
+            this.loop();
         }
     }
 
