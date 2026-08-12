@@ -57,6 +57,20 @@ class TestAbsence(TransactionCase):
                 continue
             self._worked(employee, day)
 
+    def _week(self, missing=(), employee=None):
+        """La cuadrilla trabaja del dia 7 al 3; el objetivo falta los indicados.
+
+        Hace falta historial ALREDEDOR del dia en cuestion. Una ausencia se
+        reconoce por contraste —con los companeros y con los dias vecinos— y una
+        persona de la que no se sabe nada no se evalua, a proposito.
+        """
+        target = employee or self.target
+        for offset in (7, 6, 5, 4, 3):
+            for member in self.crew:
+                if member == target and offset in missing:
+                    continue
+                self._worked(member, self._day(offset))
+
     def _scan(self, days_back=10):
         return self.Absence.sudo()._scan_period(
             self._day(days_back), self._day(1), company=self.company)
@@ -70,20 +84,14 @@ class TestAbsence(TransactionCase):
     # ==================================================================
 
     def test_falta_mientras_todos_trabajan(self):
-        """Ocho compañeros vinieron y uno no. Eso es una ausencia."""
-        for offset in (5, 4, 3):
-            self._crew_worked(self._day(offset))
-        # El dia 4 el objetivo no vino: se borra su asistencia de ese dia.
-        self.Attendance.sudo().search([
-            ("employee_id", "=", self.target.id),
-            ("check_in", ">=", datetime.combine(self._day(4), datetime.min.time())),
-            ("check_in", "<", datetime.combine(self._day(3), datetime.min.time())),
-        ]).unlink()
+        """Siete compañeros vinieron y uno no, y el vino el dia antes y el de
+        despues. Eso es una ausencia."""
+        self._week(missing=(5,))
 
         self._scan()
 
         absence = self._absences().filtered(
-            lambda a: a.absence_date == self._day(4))
+            lambda a: a.absence_date == self._day(5))
         self.assertEqual(len(absence), 1, "No detecto una ausencia evidente")
         self.assertEqual(absence.state, "proposed", "Nunca debe auto-confirmar")
         self.assertGreater(absence.confidence, 0.8)
@@ -138,17 +146,21 @@ class TestAbsence(TransactionCase):
                 propuestas.mapped("absence_date")),
         )
 
-    def test_hueco_largo_baja_la_confianza(self):
-        """Tres dias seguidos sin venir se parece a un descanso, no a faltar."""
-        for offset in (9, 8, 7, 3, 2):
-            self._crew_worked(self._day(offset))
+    def test_hueco_largo_no_se_propone(self):
+        """Tres dias seguidos sin venir se parece a un descanso, no a faltar.
+
+        Es el mismo caso que la rotacion 3x3, en chiquito: aunque toda la
+        cuadrilla haya trabajado esos tres dias, un hueco largo no se acusa.
+        """
+        self._week(missing=(6, 5, 4))
         self._scan()
 
-        largas = self._absences().filtered(lambda a: a.gap_length >= 3)
-        for absence in largas:
-            self.assertLess(
-                absence.confidence, 0.8,
-                "Un hueco largo no puede puntuar como una falta evidente")
+        propuestas = self._absences().filtered(lambda a: a.state == "proposed")
+        self.assertFalse(
+            propuestas,
+            "Un hueco de tres dias se propuso como faltas: %s" % (
+                propuestas.mapped("absence_date")),
+        )
 
     # ==================================================================
     # Nada se descuenta solo
@@ -160,7 +172,7 @@ class TestAbsence(TransactionCase):
         Una ausencia detectada pero no revisada NO puede llegar al pago. Es la
         regla que impide que un error del kiosco se convierta en un descuento.
         """
-        self._crew_worked(self._day(5), exclude=self.target)
+        self._week(missing=(5,))
         self._scan()
 
         detectadas = self._absences().filtered(lambda a: a.state == "proposed")
@@ -182,9 +194,10 @@ class TestAbsence(TransactionCase):
 
     def test_rechazada_no_se_descuenta(self):
         """Un dia marcado como "no era ausencia" vuelve a ser un dia cualquiera."""
-        self._crew_worked(self._day(5), exclude=self.target)
+        self._week(missing=(5,))
         self._scan()
         detectadas = self._absences().filtered(lambda a: a.state == "proposed")
+        self.assertTrue(detectadas)
         detectadas[0].action_reject()
 
         datos = self.Absence.olive_confirmed_absences(
@@ -197,7 +210,7 @@ class TestAbsence(TransactionCase):
         La ausencia propuesta tiene que desaparecer sola. Si no, se le
         descontaria un dia a alguien que si vino solo porque el internet fallo.
         """
-        self._crew_worked(self._day(5), exclude=self.target)
+        self._week(missing=(5,))
         self._scan()
         self.assertTrue(self._absences().filtered(lambda a: a.state == "proposed"))
 
@@ -212,9 +225,11 @@ class TestAbsence(TransactionCase):
 
     def test_revision_humana_sobrevive_al_barrido(self):
         """Una decision tomada por una persona no se borra sola."""
-        self._crew_worked(self._day(5), exclude=self.target)
+        self._week(missing=(5,))
         self._scan()
-        absence = self._absences().filtered(lambda a: a.state == "proposed")[0]
+        proposed = self._absences().filtered(lambda a: a.state == "proposed")
+        self.assertTrue(proposed)
+        absence = proposed[0]
         absence.action_confirm()
 
         self._scan()

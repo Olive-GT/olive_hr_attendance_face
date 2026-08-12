@@ -175,6 +175,7 @@ class OliveAttendancePunch(models.Model):
             kind, detail, resolution,
             punches=punch, key=punch.uuid,
             attendance_recorded=attendance_recorded,
+            company=company,
         )
 
     # ==================================================================
@@ -528,8 +529,17 @@ class OliveAttendancePunch(models.Model):
         for event in events:
             direction = event["direction"]
             if direction == "auto":
-                # Por alternancia: quien esta adentro sale, quien esta afuera entra.
-                direction = "out" if open_pair else "in"
+                # Por alternancia: quien esta adentro sale, quien esta afuera
+                # entra. Pero con un tope: si desde la entrada paso mas que la
+                # jornada maxima, este marcaje NO puede ser su salida —nadie
+                # trabaja 24 horas seguidas—. Es alguien que olvido marcar la
+                # salida y vuelve al dia siguiente. Sin este tope, esos dos dias
+                # se fusionan en una sola jornada larguisima.
+                too_long = (
+                    open_pair
+                    and event["time"] - open_pair["check_in"] > params["max_shift"]
+                )
+                direction = "in" if (not open_pair or too_long) else "out"
 
             if direction == "in":
                 if open_pair:

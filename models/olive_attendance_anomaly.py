@@ -141,7 +141,8 @@ class OliveAttendanceAnomaly(models.Model):
 
     @api.model
     def _record(self, employee, anomaly_date, kind, detail, resolution,
-                punches=None, attendance=None, attendance_recorded=True, key=""):
+                punches=None, attendance=None, attendance_recorded=True, key="",
+                company=None):
         """Registra una incidencia si no estaba ya.
 
         `key` distingue dos incidencias del mismo tipo el mismo dia (por
@@ -163,8 +164,14 @@ class OliveAttendanceAnomaly(models.Model):
             return existing
         return self.sudo().create({
             "employee_id": employee.id if employee else False,
-            "company_id": (employee.company_id.id if employee
-                           else self.env.company.id),
+            # Sin empleado hay que decir de que compania es: env.company es la
+            # del usuario que corre el cron, no la del dispositivo, y la
+            # incidencia quedaria archivada donde nadie la busca.
+            "company_id": (
+                (company and company.id)
+                or (employee and employee.company_id.id)
+                or self.env.company.id
+            ),
             "anomaly_date": anomaly_date,
             "kind": kind,
             "severity": SEVERITY_BY_KIND.get(kind, "warning"),

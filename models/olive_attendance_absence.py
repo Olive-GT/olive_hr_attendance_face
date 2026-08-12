@@ -157,6 +157,7 @@ class OliveAttendanceAbsence(models.Model):
 
         presence = self._presence_map(employees, date_from, date_to)
         excused = self._excused_map(employees, date_from, date_to)
+        first_seen = self._first_seen_map(employees)
         threshold = company.olive_absence_min_confidence or 0.6
 
         created = removed = scanned = 0
@@ -170,9 +171,9 @@ class OliveAttendanceAbsence(models.Model):
         }
 
         for day in self._days_between(date_from, date_to):
-            resolve_peers = self._peer_counts(employees, day, presence)
+            resolve_peers = self._peer_counts(employees, day, presence, first_seen)
             for employee in employees:
-                if not self._employed_on(employee, day):
+                if not self._employed_on(employee, day, first_seen):
                     continue
                 scanned += 1
                 record = existing.get((employee.id, day))
@@ -332,7 +333,7 @@ class OliveAttendanceAbsence(models.Model):
                 excused.add((leave.employee_id.id, day))
         return excused
 
-    def _peer_counts(self, employees, day, presence):
+    def _peer_counts(self, employees, day, presence, first_seen):
         """Cuantos companeros vinieron ese dia, y de cuantos.
 
         El grupo de comparacion es el departamento si lo hay y tiene gente
@@ -341,7 +342,7 @@ class OliveAttendanceAbsence(models.Model):
         """
         counts = {}
         for employee in employees:
-            if not self._employed_on(employee, day):
+            if not self._employed_on(employee, day, first_seen):
                 continue
             key = employee.department_id.id or 0
             present, total = counts.get(key, (0, 0))
@@ -376,11 +377,35 @@ class OliveAttendanceAbsence(models.Model):
             cursor += timedelta(days=1)
         return length
 
-    def _employed_on(self, employee, day):
-        """Si la persona ya estaba contratada ese dia y todavia lo estaba."""
-        if employee.create_date and employee.create_date.date() > day:
-            return False
-        return True
+    def _first_seen_map(self, employees):
+        """Primera asistencia de cada empleado, sin limite de fecha.
+
+        Es la frontera a partir de la cual tiene sentido hablar de ausencias.
+        Antes de eso no hay con que afirmar que la persona tenia que venir.
+        """
+        rows = self.env["hr.attendance"].sudo()._read_group(
+            [("employee_id", "in", employees.ids)],
+            ["employee_id"], ["check_in:min"],
+        )
+        return {
+            employee.id: value.date()
+            for employee, value in rows if employee and value
+        }
+
+    def _employed_on(self, employee, day, first_seen):
+        """Si ese dia la persona ya formaba parte del sitio.
+
+        Se deduce de los datos —su primera asistencia registrada— y no de
+        `create_date`. La diferencia importa: `create_date` es cuando alguien
+        creo la ficha en Odoo, asi que reimportar empleados borraria de un
+        plumazo todo el historial de ausencias. Un campo administrativo no puede
+        decidir sobre el sueldo de nadie.
+
+        Quien nunca aparecio ni una vez no se evalua: sin un solo dato no hay
+        base para acusarlo de faltar.
+        """
+        start = first_seen.get(employee.id)
+        return bool(start) and day >= start
 
     @staticmethod
     def _days_between(date_from, date_to):
@@ -573,6 +598,7 @@ class OliveAttendanceAbsence(models.Model):
 
         presence = self._presence_map(employees, date_from, date_to)
         excused = self._excused_map(employees, date_from, date_to)
+        first_seen = self._first_seen_map(employees)
         records = {
             (a.employee_id.id, a.absence_date): a
             for a in self.sudo().search([
