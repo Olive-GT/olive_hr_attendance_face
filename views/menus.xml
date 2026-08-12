@@ -46,6 +46,19 @@
               action="action_olive_attendance_punch"
               sequence="20"/>
 
+    <!-- Analisis. No alimenta la nomina: sirve para entender el sitio. -->
+    <menuitem id="menu_olive_summary"
+              name="Resumen de comportamiento"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_summary"
+              sequence="6"/>
+
+    <menuitem id="menu_olive_analysis"
+              name="Analisis de asistencia"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_analysis"
+              sequence="7"/>
+
     <!-- Enrolamiento -->
     <menuitem id="menu_olive_face_consent"
               name="Consentimientos"

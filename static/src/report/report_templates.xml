@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="olive_hr_attendance_face.AttendanceSummary">
+    <div class="o_olive_summary d-flex flex-column h-100 p-3">
+
+        <div t-if="state.phase === 'loading'" class="d-flex align-items-center gap-3 py-5">
+            <div class="spinner-border text-primary"/>
+            <span>Calculando...</span>
+        </div>
+
+        <div t-if="state.phase === 'error'" class="alert alert-danger">
+            <h4>No se pudo calcular</h4>
+            <p t-esc="state.error"/>
+        </div>
+
+        <t t-if="state.phase === 'ready'">
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                <h4 class="mb-0 me-2">Comportamiento de asistencia</h4>
+                <button class="btn btn-sm btn-secondary" t-on-click="() => this.shift(-1)">
+                    <i class="fa fa-chevron-left"/>
+                </button>
+                <span class="fw-bold">
+                    <t t-esc="state.dateFrom"/> — <t t-esc="state.dateTo"/>
+                </span>
+                <button class="btn btn-sm btn-secondary" t-on-click="() => this.shift(1)">
+                    <i class="fa fa-chevron-right"/>
+                </button>
+            </div>
+
+            <div class="d-flex gap-3 flex-wrap mb-3">
+                <div class="card p-3">
+                    <div class="text-muted small">Personas con actividad</div>
+                    <div class="fs-3" t-esc="state.site.employees"/>
+                </div>
+                <div class="card p-3">
+                    <div class="text-muted small">Dias con movimiento</div>
+                    <div class="fs-3" t-esc="state.site.days"/>
+                </div>
+                <div class="card p-3">
+                    <div class="text-muted small">La obra arranca a las</div>
+                    <div class="fs-3" t-esc="asClock(state.site.median_in)"/>
+                </div>
+                <div class="card p-3">
+                    <div class="text-muted small">Asistencias registradas</div>
+                    <div class="fs-3" t-esc="state.site.attendances"/>
+                </div>
+            </div>
+
+            <div class="alert alert-light border small">
+                <b>La columna que mas informa es «Variacion».</b>
+                Dos personas pueden entrar en promedio a las 7:00, y una hacerlo
+                siempre a las 7:00 mientras la otra alterna entre las 6:00 y las
+                8:00. La segunda es un problema de operacion aunque su promedio se
+                vea impecable. <b>«Vs. cuadrilla»</b> compara con lo que hizo el
+                resto de la obra ese dia, no con un horario configurado.
+            </div>
+
+            <div class="flex-grow-1 overflow-auto">
+                <table class="table table-sm table-hover">
+                    <thead class="sticky-top bg-body">
+                        <tr>
+                            <th role="button" t-on-click="() => this.sortBy('name')">Empleado</th>
+                            <th class="text-end" role="button" t-on-click="() => this.sortBy('days')">Dias</th>
+                            <th class="text-end">Entrada media</th>
+                            <th class="text-end">Mas temprano</th>
+                            <th class="text-end">Mas tarde</th>
+                            <th class="text-end" role="button" t-on-click="() => this.sortBy('spread_minutes')">
+                                Variacion
+                            </th>
+                            <th class="text-end" role="button" t-on-click="() => this.sortBy('vs_crew_minutes')">
+                                Vs. cuadrilla
+                            </th>
+                            <th class="text-end">Salida media</th>
+                            <th class="text-end" role="button" t-on-click="() => this.sortBy('avg_hours')">
+                                Horas/dia
+                            </th>
+                            <th class="text-end" role="button" t-on-click="() => this.sortBy('total_hours')">
+                                Horas totales
+                            </th>
+                            <th class="text-end" role="button" t-on-click="() => this.sortBy('absences')">
+                                Ausencias
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="state.rows" t-as="row" t-key="row.employee_id">
+                            <td>
+                                <div t-esc="row.name"/>
+                                <div t-if="row.department" class="text-muted small"
+                                     t-esc="row.department"/>
+                            </td>
+                            <td class="text-end" t-esc="row.days"/>
+                            <td class="text-end font-monospace" t-esc="asClock(row.avg_in)"/>
+                            <td class="text-end font-monospace text-muted"
+                                t-esc="asClock(row.earliest_in)"/>
+                            <td class="text-end font-monospace text-muted"
+                                t-esc="asClock(row.latest_in)"/>
+                            <td class="text-end" t-att-class="spreadClass(row)">
+                                ± <t t-esc="row.spread_minutes"/> min
+                            </td>
+                            <td class="text-end" t-att-class="lateClass(row)">
+                                <t t-esc="signedMinutes(row.vs_crew_minutes)"/> min
+                            </td>
+                            <td class="text-end font-monospace" t-esc="asClock(row.avg_out)"/>
+                            <td class="text-end" t-esc="row.avg_hours"/>
+                            <td class="text-end" t-esc="row.total_hours"/>
+                            <td class="text-end"
+                                t-att-class="row.absences ? 'text-danger fw-bold' : 'text-muted'"
+                                t-esc="row.absences"/>
+                        </tr>
+                        <tr t-if="!state.rows.length">
+                            <td colspan="11" class="text-muted text-center py-4">
+                                No hay asistencias registradas en este periodo.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </t>
+    </div>
+</t>
+
+</templates>
