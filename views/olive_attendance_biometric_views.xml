@@ -137,6 +137,18 @@
         <field name="code">action = records.action_olive_compare()</field>
     </record>
 
+    <!-- Activar es un paso aparte de procesar a proposito: procesar calcula el
+         vector, activar es decir "esta foto se usa para reconocer". Pero de a
+         una seria tedioso con cien personas. -->
+    <record id="action_olive_face_activate_server" model="ir.actions.server">
+        <field name="name">Activar fotos seleccionadas</field>
+        <field name="model_id" ref="model_olive_attendance_face_template"/>
+        <field name="binding_model_id" ref="model_olive_attendance_face_template"/>
+        <field name="binding_view_types">list,kanban</field>
+        <field name="state">code</field>
+        <field name="code">records.filtered(lambda t: t.compute_state == "ok").action_activate()</field>
+    </record>
+
     <record id="action_olive_face_process" model="ir.actions.client">
         <field name="name">Procesar fotos</field>
         <field name="tag">olive_face_process</field>
