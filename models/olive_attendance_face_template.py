@@ -258,6 +258,50 @@ class OliveAttendanceFaceTemplate(models.Model):
             } for t in templates if t.embedding],
         }
 
+    @api.model
+    def olive_identify_payload(self):
+        """TODOS los vectores de la compania, para probar identificacion 1:N.
+
+        La diferencia con la pantalla de verificacion no es cosmetica: comparar
+        contra una sola persona (1:1) responde "¿se parece?", que es una
+        pregunta facil. El kiosco tiene que responder "¿a quien de todos se
+        parece mas, y estoy lo bastante seguro?" (1:N), que es donde aparecen
+        las confusiones y donde el umbral se gana o se pierde.
+
+        Aqui se baja el indice completo igual que lo hara el kiosco. Con 100
+        empleados y 3 fotos cada uno son ~205 KB: cabe de sobra en memoria.
+        """
+        company = self.env.company
+        profile = company._olive_face_profile()
+        if not profile:
+            raise UserError(_(
+                "No hay un perfil de modelos configurado. Se define en "
+                "Ajustes -> Asistencias -> Reconocimiento Facial."
+            ))
+        templates = self.sudo().search([
+            ("employee_id.company_id", "=", company.id),
+            ("active", "=", True),
+            ("embedding", "!=", False),
+            ("embedding_version", "=", profile.embedding_version),
+        ])
+        return {
+            "pipeline_version": self.env["hr.employee"]._olive_pipeline_version(),
+            "profile": profile._bootstrap_payload(),
+            "settings": company._olive_face_client_settings(),
+            "templates": [{
+                "id": t.id,
+                "employee_id": t.employee_id.id,
+                "employee": t.employee_id.display_name,
+                "name": t.name,
+                "source": t.source,
+                # Una foto solo cuenta para el kiosco si esta activa; aqui se
+                # bajan tambien las que no lo estan para poder medir antes de
+                # registrar consentimiento, pero se marcan.
+                "active_state": t.state,
+                "embedding": t.embedding,
+            } for t in templates],
+        }
+
     def _sync_payload(self):
         """Representacion compacta para el sync hacia el kiosco."""
         return [{

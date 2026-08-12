@@ -39,6 +39,12 @@
               action="action_olive_face_process"
               sequence="40"/>
 
+    <menuitem id="menu_olive_face_identify"
+              name="Probar identificacion"
+              parent="menu_olive_face_root"
+              action="action_olive_face_identify"
+              sequence="45"/>
+
     <!-- Infraestructura -->
     <menuitem id="menu_olive_face_device"
               name="Kioscos"

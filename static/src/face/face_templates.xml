@@ -285,4 +285,155 @@
     </div>
 </t>
 
+
+<t t-name="olive_hr_attendance_face.FaceIdentify">
+    <div class="o_olive_face d-flex flex-column h-100">
+
+        <div t-if="state.phase === 'loading'" class="d-flex flex-column align-items-center justify-content-center h-100 gap-3">
+            <div class="spinner-border text-primary"/>
+            <div class="fs-5" t-esc="state.progress"/>
+        </div>
+
+        <div t-if="state.phase === 'error'" class="p-4">
+            <div class="alert alert-danger">
+                <h4>No se pudo iniciar</h4>
+                <p t-esc="state.error"/>
+                <t t-if="state.cameraError">
+                    <hr/>
+                    <p class="mb-0 small">
+                        Sin conexion segura (HTTPS o localhost) el navegador no permite
+                        usar la camara, ni siquiera con el permiso concedido.
+                    </p>
+                </t>
+            </div>
+        </div>
+
+        <div t-if="state.phase === 'ready'" class="d-flex flex-grow-1 overflow-hidden">
+            <div class="flex-grow-1 d-flex flex-column p-3 overflow-auto">
+
+                <div class="d-flex align-items-baseline gap-3 mb-2">
+                    <h4 class="mb-0">Prueba de identificacion</h4>
+                    <span class="text-muted small">
+                        contra <b t-esc="state.peopleCount"/> persona(s),
+                        <b t-esc="state.templateCount"/> foto(s)
+                    </span>
+                </div>
+
+                <div class="o_olive_stage position-relative bg-dark rounded">
+                    <video t-ref="video" playsinline="true" muted="true" class="w-100 d-block rounded"/>
+                    <canvas t-ref="overlay" class="position-absolute top-0 start-0 w-100 h-100"/>
+                </div>
+
+                <div class="d-flex align-items-center gap-3 mt-2 flex-wrap">
+                    <span class="badge" t-att-class="state.live.detected ? 'text-bg-success' : 'text-bg-secondary'"
+                          t-esc="liveMessage"/>
+                    <span class="text-muted small">Rostro: <b t-esc="state.live.facePx"/> px</span>
+                    <span t-if="state.streak" class="text-muted small">
+                        Confirmando: <b t-esc="state.streak"/> / <t t-esc="state.settings.frames_required"/> frames
+                    </span>
+                </div>
+
+                <!-- La decision sostenida: lo que el kiosco habria hecho. -->
+                <div t-if="state.decision" class="alert mt-3" t-att-class="decisionClass">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <div class="fw-bold" t-esc="decisionTitle"/>
+                            <div class="fs-3" t-esc="state.decision.top1.name"/>
+                            <div class="small" t-esc="state.decision.reason"/>
+                        </div>
+                        <div class="text-end font-monospace">
+                            <div class="fs-4" t-esc="fmt(state.decision.top1.score)"/>
+                            <div class="small">margen <t t-esc="fmt(state.decision.margin)"/></div>
+                        </div>
+                    </div>
+                    <hr/>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="small">
+                            Segundo candidato:
+                            <b t-esc="state.decision.top2 ? state.decision.top2.name : '—'"/>
+                            <span class="font-monospace">
+                                (<t t-esc="fmt(state.decision.top2 ? state.decision.top2.score : null)"/>)
+                            </span>
+                        </span>
+                        <button class="btn btn-sm btn-primary" t-on-click="retry">
+                            Probar de nuevo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ranking en vivo: la parte que ensena de verdad. -->
+                <h6 class="mt-3">A quien se parece, ahora mismo</h6>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Persona</th>
+                            <th class="text-end">Puntaje</th>
+                            <th>Foto que mas coincide</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="state.ranking" t-as="row" t-key="row.id"
+                            t-att-class="rowClass(row)">
+                            <td t-esc="row.name"/>
+                            <td class="text-end font-monospace" t-esc="fmt(row.score)"/>
+                            <td class="text-muted small" t-esc="row.template"/>
+                        </tr>
+                        <tr t-if="!state.ranking.length">
+                            <td colspan="3" class="text-muted small">
+                                Ponete frente a la camara.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="o_olive_side border-start p-3 overflow-auto">
+                <div class="alert alert-info small">
+                    <b>Esta pantalla no marca nada.</b> Corre las mismas guardas que
+                    el kiosco y muestra la decision que se habria tomado.
+                </div>
+
+                <h6>Umbrales en uso</h6>
+                <table class="table table-sm small">
+                    <tr><td>Marca a partir de</td>
+                        <td class="text-end font-monospace" t-esc="fmt(state.settings.match_threshold)"/></tr>
+                    <tr><td>Sin revision a partir de</td>
+                        <td class="text-end font-monospace" t-esc="fmt(state.settings.review_threshold)"/></tr>
+                    <tr><td>Margen minimo sobre el 2do</td>
+                        <td class="text-end font-monospace" t-esc="fmt(state.settings.margin_min)"/></tr>
+                    <tr><td>Frames de acuerdo</td>
+                        <td class="text-end font-monospace" t-esc="state.settings.frames_required"/></tr>
+                </table>
+
+                <div class="alert alert-warning small">
+                    <b>La prueba que decide el proyecto:</b> que una persona que NO esta
+                    enrolada se pare frente a la camara. Su mejor puntaje deberia quedar
+                    claramente por debajo de
+                    <b class="font-monospace" t-esc="fmt(state.settings.match_threshold)"/>.
+                    Si se acerca, el umbral es peligroso y hay que subirlo.
+                </div>
+
+                <h6 class="mt-3">Decisiones de esta sesion</h6>
+                <div t-if="!state.log.length" class="text-muted small">
+                    Todavia ninguna.
+                </div>
+                <div t-foreach="state.log" t-as="entry" t-key="entry.key"
+                     class="border-bottom py-2 small">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <span class="badge" t-att-class="logClass(entry)" t-esc="entry.name"/>
+                        <span class="font-monospace" t-esc="fmt(entry.score)"/>
+                    </div>
+                    <div class="text-muted">
+                        2do: <t t-esc="entry.runnerUp"/>
+                        <span class="font-monospace">
+                            (<t t-esc="fmt(entry.runnerUpScore)"/>)
+                        </span>
+                        · margen <span class="font-monospace" t-esc="fmt(entry.margin)"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</t>
+
 </templates>
