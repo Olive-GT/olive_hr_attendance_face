@@ -109,11 +109,21 @@ class HrEmployee(models.Model):
             "type": "ir.actions.client",
             "tag": "olive_face_verify",
             "name": _("Verificar identificacion: %s", self.name),
+            # El id va por las dos vias a proposito: `params` se pierde al
+            # recargar la pagina (no se serializa en la URL) y sin el contexto
+            # la pantalla se quedaria sin saber a quien verificar.
             "params": {"employee_id": self.id},
+            "context": {"active_id": self.id, "active_model": "hr.employee"},
         }
 
     def olive_face_context(self):
         """Contexto para la pantalla de verificacion y de captura con camara."""
+        if not self:
+            raise UserError(_(
+                "La pantalla se abrio sin saber a que empleado verificar. "
+                "Entra desde el boton 'Verificar identificacion' de la ficha "
+                "del empleado."
+            ))
         self.ensure_one()
         company = self.company_id or self.env.company
         profile = company._olive_face_profile()

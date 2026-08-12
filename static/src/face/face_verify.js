@@ -30,6 +30,33 @@ function errorText(err) {
     return err?.data?.message || err?.message || String(err);
 }
 
+/** De donde sale el empleado a verificar.
+ *
+ *  `params` solo existe mientras dure la sesion del navegador: NO se serializa
+ *  en la URL. Al recargar la pagina, o al entrar directo a
+ *  /odoo/employees/84/olive_face_verify, llega vacio y la llamada al servidor
+ *  se hace sobre un recordset vacio ("Expected singleton"). La URL si conserva
+ *  el id, asi que es la ultima red. Se prueban las tres vias en orden.
+ */
+function resolveEmployeeId(action) {
+    const direct =
+        action?.params?.employee_id ||
+        action?.context?.employee_id ||
+        action?.context?.active_id;
+    if (direct) {
+        return Number(direct);
+    }
+    // /odoo/employees/84/olive_face_verify -> el ultimo segmento numerico.
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+        const n = Number(parts[i]);
+        if (Number.isInteger(n) && n > 0) {
+            return n;
+        }
+    }
+    return null;
+}
+
 export class FaceVerify extends Component {
     static template = "olive_hr_attendance_face.FaceVerify";
     static props = ["*"];
@@ -48,6 +75,7 @@ export class FaceVerify extends Component {
             progress: _t("Iniciando..."),
             error: null,
             insecure: false,
+            cameraError: false,
             employeeName: "",
             consentState: null,
             templates: [],
@@ -58,7 +86,7 @@ export class FaceVerify extends Component {
             busy: false,
         });
 
-        this.employeeId = this.props.action?.params?.employee_id;
+        this.employeeId = resolveEmployeeId(this.props.action);
         this.conditions = CONDITIONS;
         this.running = false;
 
@@ -68,6 +96,13 @@ export class FaceVerify extends Component {
 
     async start() {
         try {
+            if (!this.employeeId) {
+                throw new Error(_t(
+                    "No se pudo saber a que empleado verificar. Abri esta pantalla "
+                    + "desde el boton 'Verificar identificacion' de la ficha del "
+                    + "empleado, no escribiendo la direccion a mano."
+                ));
+            }
             this.ctx = await this.orm.call("hr.employee", "olive_face_context", [this.employeeId]);
             this.state.employeeName = this.ctx.employee.name;
             this.state.consentState = this.ctx.consent.state;
@@ -93,6 +128,10 @@ export class FaceVerify extends Component {
                     audio: false,
                 });
             } catch (camErr) {
+                // Marcado como fallo de camara para no dar la pista equivocada:
+                // la nota sobre HTTPS solo tiene sentido si el problema fue la
+                // camara, y aparecia en todos los errores.
+                this.state.cameraError = true;
                 throw new Error(this.cameraErrorText(camErr));
             }
             this.videoRef.el.srcObject = this.stream;

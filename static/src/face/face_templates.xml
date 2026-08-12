@@ -110,12 +110,14 @@
             <div class="alert alert-danger">
                 <h4>No se pudo iniciar</h4>
                 <p t-esc="state.error"/>
-                <hr/>
-                <p class="mb-0 small">
-                    Causas frecuentes: no se dio permiso a la camara, o el servidor no
-                    esta en HTTPS. Sin conexion segura el navegador no permite usar la
-                    camara, ni siquiera con permiso concedido.
-                </p>
+                <t t-if="state.cameraError">
+                    <hr/>
+                    <p class="mb-0 small">
+                        Causas frecuentes: no se dio permiso a la camara, o el servidor no
+                        esta en HTTPS. Sin conexion segura el navegador no permite usar la
+                        camara, ni siquiera con permiso concedido.
+                    </p>
+                </t>
             </div>
         </div>
 
