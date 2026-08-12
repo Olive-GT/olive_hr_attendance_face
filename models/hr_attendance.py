@@ -60,7 +60,10 @@ class HrAttendance(models.Model):
     )
     olive_check_out_hour = fields.Float(
         compute="_compute_olive_local", store=True, aggregator="avg",
-        string="Hora de salida", digits=(4, 2),
+        string="Hora del ultimo avistamiento", digits=(4, 2),
+        help="Con una camara pasiva es la ultima vez que se vio a la persona, "
+             "que no es lo mismo que la hora en que se fue: si se retira sin "
+             "volver a pasar frente a la camara, este numero queda corto.",
     )
     olive_weekday = fields.Selection(
         [("0", "Lunes"), ("1", "Martes"), ("2", "Miercoles"), ("3", "Jueves"),

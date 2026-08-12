@@ -48,6 +48,12 @@
             </div>
 
             <div class="alert alert-light border small">
+                <b>«Ultimo avistamiento» no es la hora de salida.</b>
+                Con una camara pasiva, es la ultima vez que vio a la persona. Si
+                alguien se va sin volver a pasar frente a ella, el numero queda
+                corto. Sirve para comparar entre personas y entre dias, no como
+                hora exacta de salida.
+                <br/>
                 <b>La columna que mas informa es «Variacion».</b>
                 Dos personas pueden entrar en promedio a las 7:00, y una hacerlo
                 siempre a las 7:00 mientras la otra alterna entre las 6:00 y las
@@ -71,7 +77,9 @@
                             <th class="text-end" role="button" t-on-click="() => this.sortBy('vs_crew_minutes')">
                                 Vs. cuadrilla
                             </th>
-                            <th class="text-end">Salida media</th>
+                            <th class="text-end" title="Ultima vez que la camara vio a la persona, que no es lo mismo que la hora en que se fue">
+                                Ultimo avistamiento
+                            </th>
                             <th class="text-end" role="button" t-on-click="() => this.sortBy('avg_hours')">
                                 Horas/dia
                             </th>
