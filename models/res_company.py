@@ -48,9 +48,13 @@ class ResCompany(models.Model):
         default=4000, string="Ventana de frames (ms)",
     )
     olive_face_cooldown_seconds = fields.Integer(
-        default=90, string="Bloqueo entre marcajes (s)",
-        help="Guarda 4. Sin pantalla de confirmacion, la camara sigue viendo a la "
-             "persona: sin este bloqueo generaria marcajes en rafaga.",
+        default=900, string="Bloqueo entre marcajes (s)",
+        help="Guarda 4. La camara sigue viendo a la persona despues de "
+             "reconocerla: sin este bloqueo generaria marcajes en rafaga.\n\n"
+             "Con una camara pasiva en un escritorio, quien trabaja ahi esta en "
+             "cuadro todo el dia. A 90 segundos generaria unos 300 registros "
+             "diarios de una sola persona. A 15 minutos son 32, que alcanzan de "
+             "sobra para saber a que hora llego y a que hora se fue.",
     )
 
     # -- calidad de la captura -------------------------------------------
@@ -100,6 +104,18 @@ class ResCompany(models.Model):
              "Es la defensa contra el error mas caro del sistema: sin ella, "
              "marcar dos veces al entrar convierte el dia entero en tres "
              "minutos trabajados.",
+    )
+    olive_face_pairing_mode = fields.Selection(
+        [("first_last", "Primer y ultimo avistamiento del dia"),
+         ("alternate", "Alternando entrada y salida")],
+        default="first_last", required=True, string="Como se arma la jornada",
+        help="**Primer y ultimo avistamiento** es lo correcto para una camara "
+             "pasiva que ve pasar a la gente: el primer avistamiento del dia es "
+             "la entrada, el ultimo es la salida, y todo lo del medio se guarda "
+             "como evidencia sin crear jornadas nuevas.\n\n"
+             "**Alternando** sirve solo si la persona marca deliberadamente al "
+             "entrar y al salir. Con una camara que ve a alguien veinte veces al "
+             "dia, alternar le partiria la jornada en diez pedazos.",
     )
     olive_face_max_shift_hours = fields.Float(
         default=16.0, string="Jornada maxima (h)",

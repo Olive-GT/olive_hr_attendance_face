@@ -250,6 +250,7 @@ class OliveAttendancePunch(models.Model):
             "cutoff_hour": company.olive_face_day_cutoff_hour or 0.0,
             "protect_validated": company.olive_face_protect_validated,
             "presence_first": company.olive_face_presence_first,
+            "pairing_mode": company.olive_face_pairing_mode or "first_last",
             "expected_min": timedelta(hours=company.olive_face_expected_min_hours or 0),
             "expected_max": timedelta(
                 hours=company.olive_face_expected_max_hours or 24),
@@ -289,7 +290,7 @@ class OliveAttendancePunch(models.Model):
             self._jornada_date(dt_to, tz, params["cutoff_hour"]),
         )
 
-        pairs, rejected, notes = self._normalize_sequence(punches, params)
+        pairs, rejected, notes = self._normalize_sequence(punches, params, tz)
         result = self._apply_pairs(employee, pairs, managed, immutable, params)
 
         # Cada incidencia queda enlazada a la asistencia que produjo, para que
@@ -400,7 +401,90 @@ class OliveAttendancePunch(models.Model):
     # Paso 3 — normalizar la secuencia
     # ==================================================================
 
-    def _normalize_sequence(self, punches, params):
+    def _pair_first_last(self, events, params, tz, notes):
+        """Una jornada por dia: del primer avistamiento al ultimo.
+
+        Es el modo correcto para una camara pasiva, y la diferencia con alternar
+        no es de matiz. Si la camara esta en el escritorio de alguien que trabaja
+        ahi, esa persona aparece en cuadro decenas de veces al dia. Alternando,
+        cada avistamiento seria una entrada o una salida y su jornada quedaria
+        partida en diez pedazos de quince minutos. Con primer y ultimo, sale una
+        sola jornada correcta sin importar cuantas veces se la vio.
+
+        Lo del medio no se descarta: se conserva enlazado a la asistencia, como
+        evidencia de que la persona estuvo ahi todo el dia.
+        """
+        by_day = {}
+        for event in events:
+            day = self._jornada_date(event["time"], tz, params["cutoff_hour"])
+            by_day.setdefault(day, []).append(event)
+
+        pairs = []
+        today = fields.Date.context_today(self)
+        for day in sorted(by_day):
+            day_events = by_day[day]
+            first = day_events[0]
+            last = day_events[-1]
+            extra = self.browse([e["punch"].id for e in day_events[1:-1]])
+
+            if len(day_events) == 1:
+                if day >= today:
+                    # Todavia esta aqui: la jornada sigue abierta y es correcto
+                    # que asi se vea.
+                    pairs.append({
+                        "check_in": first["time"], "in_punch": first["punch"],
+                        "check_out": None, "out_punch": None, "anomaly": None,
+                        "extra_punches": self.browse(),
+                    })
+                    continue
+                # Un solo avistamiento en un dia ya cerrado: consta que vino,
+                # pero no cuanto se quedo. Se registra la presencia con duracion
+                # simbolica en vez de inventar una hora de salida.
+                pairs.append({
+                    "check_in": first["time"],
+                    "check_out": first["time"] + timedelta(minutes=1),
+                    "in_punch": first["punch"], "out_punch": None,
+                    "anomaly": "missing_out", "synthetic": True,
+                    "extra_punches": self.browse(),
+                })
+                notes.append({
+                    "kind": "missing_out", "moment": first["time"],
+                    "punches": first["punch"], "key": first["punch"].uuid,
+                    "detail": _("La camara solo lo vio una vez en todo el dia."),
+                    "resolution": _(
+                        "Quedo constancia de que vino. La hora de salida se "
+                        "desconoce y no debe usarse para calcular horas."),
+                })
+                continue
+
+            pairs.append({
+                "check_in": first["time"], "in_punch": first["punch"],
+                "check_out": last["time"], "out_punch": last["punch"],
+                "anomaly": None, "extra_punches": extra,
+            })
+
+        # Jornadas de duracion rara, igual que en el otro modo.
+        for pair in pairs:
+            if pair.get("synthetic") or not pair["check_out"]:
+                continue
+            duration = pair["check_out"] - pair["check_in"]
+            kind = None
+            if duration < params["expected_min"]:
+                kind = "short_session"
+            elif duration > params["expected_max"]:
+                kind = "long_session"
+            if kind:
+                notes.append({
+                    "kind": kind, "moment": pair["check_in"],
+                    "punches": pair["in_punch"], "key": pair["in_punch"].uuid,
+                    "detail": _("Jornada de %.1f horas.",
+                                duration.total_seconds() / 3600),
+                    "resolution": _("Se registro tal cual. Solo se marca por rara."),
+                })
+
+        return pairs, self.browse(), notes
+
+    def _normalize_sequence(self, punches, params, tz):
         """Convierte una lista de marcajes en pares entrada/salida.
 
         Es donde se tratan los casos degenerados. Ninguno es teorico: todos
@@ -433,6 +517,9 @@ class OliveAttendancePunch(models.Model):
                 "detail": _("%s marcaje(s) a segundos del anterior.", len(bursts)),
                 "resolution": _("Se descartaron por repetidos. No afectan la jornada."),
             })
+
+        if params["pairing_mode"] == "first_last":
+            return self._pair_first_last(events, params, tz, notes)
 
         pairs = []
         rejected = self.browse()
@@ -682,6 +769,14 @@ class OliveAttendancePunch(models.Model):
                     "state": "applied", "attendance_id": attendance.id,
                     "attendance_field": "check_out", "error_message": False,
                     "fold_attempts": pair["out_punch"].fold_attempts + 1,
+                })
+            extra = pair.get("extra_punches")
+            if extra:
+                # Sin attendance_field: no son la entrada ni la salida, pero
+                # constan como prueba de que la persona estuvo en el sitio.
+                extra.sudo().write({
+                    "state": "applied", "attendance_id": attendance.id,
+                    "attendance_field": False, "error_message": False,
                 })
             result["applied"] += 1
         return result

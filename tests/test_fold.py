@@ -35,6 +35,7 @@ class TestFold(TransactionCase):
             "olive_face_max_shift_hours": 16.0,
             "olive_face_day_cutoff_hour": 0.0,
             "olive_face_protect_validated": True,
+            "olive_face_pairing_mode": "alternate",
         })
         cls.employee = cls.env["hr.employee"].create({
             "name": "Empleado Prueba", "company_id": cls.company.id,
@@ -494,3 +495,71 @@ class TestFold(TransactionCase):
         self.assertEqual(len(self._attendances()), 1)
         self.assertEqual(len(self._attendances(otro)), 1)
         self.assertEqual(self._attendances(otro).check_in, self._at(10, 14))
+
+
+@tagged("post_install", "-at_install", "olive_face")
+class TestFoldFirstLast(TestFold):
+    """El mismo doblado, pero con una camara pasiva que ve a la gente muchas veces.
+
+    Es el modo del despliegue real: la camara esta en el escritorio de la
+    asistente y ve pasar a todo el mundo, varias veces al dia, sin que nadie
+    marque deliberadamente nada.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company.olive_face_pairing_mode = "first_last"
+
+    def test_muchos_avistamientos_una_sola_jornada(self):
+        """El caso que motiva el modo.
+
+        Alternando entrada y salida, ocho avistamientos serian cuatro jornadas
+        cortadas. Con primer y ultimo es una sola jornada correcta.
+        """
+        for hour in range(13, 24, 2):        # 07:00 a 17:00 local, cada 2 h
+            self._punch(self._at(10, hour))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1, "La jornada se partio en pedazos")
+        self.assertEqual(attendances.check_in, self._at(10, 13))
+        self.assertEqual(attendances.check_out, self._at(10, 23))
+
+    def test_avistamientos_intermedios_quedan_como_evidencia(self):
+        """Lo del medio no se tira: prueba que la persona estuvo todo el dia."""
+        for hour in (13, 17, 20, 23):
+            self._punch(self._at(10, hour))
+        self._fold()
+
+        attendance = self._attendances()
+        intermedios = self._our_punches().filtered(
+            lambda p: p.state == "applied" and not p.attendance_field)
+        self.assertEqual(len(intermedios), 2)
+        self.assertEqual(
+            set(intermedios.mapped("attendance_id")), {attendance},
+            "Los avistamientos intermedios tienen que quedar enlazados al dia")
+
+    def test_un_solo_avistamiento_deja_constancia(self):
+        """Se le vio una vez: consta que vino, aunque no cuanto se quedo."""
+        self._punch(self._at(10, 13))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1, "Se perdio la presencia")
+        self.assertEqual(attendances.olive_anomaly, "missing_out")
+        self.assertEqual(len(self._anomalies("missing_out")), 1)
+
+    def test_dias_distintos_no_se_mezclan(self):
+        """Primer y ultimo es POR DIA, no del periodo entero."""
+        for day in (10, 11):
+            self._punch(self._at(day, 13))
+            self._punch(self._at(day, 18))
+            self._punch(self._at(day, 23))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 2)
+        self.assertEqual(attendances[0].check_in, self._at(10, 13))
+        self.assertEqual(attendances[0].check_out, self._at(10, 23))
+        self.assertEqual(attendances[1].check_in, self._at(11, 13))

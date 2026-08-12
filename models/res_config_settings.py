@@ -50,6 +50,8 @@ class ResConfigSettings(models.TransientModel):
         related="company_id.olive_face_expected_min_hours", readonly=False)
     olive_face_expected_max_hours = fields.Float(
         related="company_id.olive_face_expected_max_hours", readonly=False)
+    olive_face_pairing_mode = fields.Selection(
+        related="company_id.olive_face_pairing_mode", readonly=False)
     olive_face_max_shift_hours = fields.Float(
         related="company_id.olive_face_max_shift_hours", readonly=False)
     olive_face_day_cutoff_hour = fields.Float(
