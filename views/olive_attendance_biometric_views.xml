@@ -128,6 +128,15 @@
         </field>
     </record>
 
+    <record id="action_olive_face_compare_server" model="ir.actions.server">
+        <field name="name">Comparar fotos seleccionadas</field>
+        <field name="model_id" ref="model_olive_attendance_face_template"/>
+        <field name="binding_model_id" ref="model_olive_attendance_face_template"/>
+        <field name="binding_view_types">list,kanban</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_olive_compare()</field>
+    </record>
+
     <record id="action_olive_face_process" model="ir.actions.client">
         <field name="name">Procesar fotos</field>
         <field name="tag">olive_face_process</field>

@@ -196,4 +196,89 @@
     </div>
 </t>
 
+
+<t t-name="olive_hr_attendance_face.FaceCompare">
+    <div class="o_olive_face p-4 h-100 overflow-auto">
+
+        <div t-if="state.phase === 'loading'" class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary"/>
+        </div>
+
+        <div t-if="state.phase === 'error'" class="alert alert-danger">
+            <h4>No se pudo comparar</h4>
+            <p t-esc="state.error"/>
+        </div>
+
+        <div t-if="state.phase === 'ready'">
+            <h3>Comparacion de fotos</h3>
+            <p class="text-muted">
+                Similitud coseno entre los vectores ya calculados. No hace falta camara
+                ni descargar modelos: es aritmetica sobre datos que ya estan guardados.
+            </p>
+
+            <div class="alert" t-att-class="verdict.cls">
+                <b t-esc="verdict.text"/>
+            </div>
+
+            <div class="d-flex gap-4 flex-wrap mb-3">
+                <div>
+                    <div class="text-muted small">Peor caso, misma persona</div>
+                    <div class="fs-4 font-monospace" t-esc="sameMin === null ? '—' : sameMin.toFixed(3)"/>
+                    <div class="text-muted small">deberia ser ALTO</div>
+                </div>
+                <div>
+                    <div class="text-muted small">Mejor caso, personas distintas</div>
+                    <div class="fs-4 font-monospace" t-esc="diffMax === null ? '—' : diffMax.toFixed(3)"/>
+                    <div class="text-muted small">deberia ser BAJO</div>
+                </div>
+                <div>
+                    <div class="text-muted small">Separacion</div>
+                    <div class="fs-4 font-monospace" t-esc="margin === null ? '—' : margin.toFixed(3)"/>
+                    <div class="text-muted small">cuanto mas grande, mas seguro</div>
+                </div>
+                <div>
+                    <div class="text-muted small">Umbral configurado</div>
+                    <div class="fs-4 font-monospace" t-esc="state.settings.match_threshold.toFixed(3)"/>
+                    <div class="text-muted small">tiene que caer en la separacion</div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm text-center align-middle">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th t-foreach="state.items" t-as="it" t-key="it.id" class="small">
+                                <div t-esc="it.employee"/>
+                                <div class="text-muted fw-normal" t-esc="it.name"/>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="state.items" t-as="row" t-key="row.id">
+                            <th class="text-start small">
+                                <div t-esc="row.employee"/>
+                                <div class="text-muted fw-normal" t-esc="row.name"/>
+                            </th>
+                            <td t-foreach="state.items" t-as="col" t-key="col.id"
+                                t-att-class="cellClass(state.matrix[row_index][col_index], row_index, col_index)"
+                                class="font-monospace"
+                                t-esc="fmt(state.matrix[row_index][col_index])"/>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="alert alert-secondary small">
+                <b>Como leerlo.</b>
+                Verde es correcto y rojo es problema, pero el criterio cambia segun el par:
+                entre fotos de <b>la misma persona</b> el puntaje deberia superar el umbral;
+                entre <b>personas distintas</b> deberia quedar muy por debajo. Un puntaje
+                alto entre dos personas distintas es el fallo grave, porque significa que
+                el kiosco podria confundirlas.
+            </div>
+        </div>
+    </div>
+</t>
+
 </templates>

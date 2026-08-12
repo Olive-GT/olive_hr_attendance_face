@@ -27,7 +27,7 @@ import math
 import struct
 
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 # Tolerancia sobre la norma L2. El vector viaja normalizado desde el navegador;
 # la holgura solo absorbe el redondeo de float32.
@@ -217,6 +217,46 @@ class OliveAttendanceFaceTemplate(models.Model):
         # arriba, que solo corresponde cuando cambia la foto.
         super().write(vals)
         return True
+
+    def action_olive_compare(self):
+        """Abre la matriz de similitud entre las fotos seleccionadas."""
+        procesadas = self.filtered(lambda t: t.embedding)
+        if len(procesadas) < 2:
+            raise UserError(_(
+                "Hacen falta al menos dos fotos ya procesadas para comparar. "
+                "Seleccionaste %(sel)s, de las cuales %(ok)s tienen vector.",
+                sel=len(self), ok=len(procesadas),
+            ))
+        return {
+            "type": "ir.actions.client",
+            "tag": "olive_face_compare",
+            "name": _("Comparar fotos"),
+            "params": {"template_ids": procesadas.ids},
+        }
+
+    @api.model
+    def olive_compare_payload(self, template_ids):
+        """Vectores y etiquetas de las fotos a comparar.
+
+        No hace falta ningun modelo de IA: los vectores ya estan calculados y la
+        similitud coseno entre vectores normalizados es un producto punto.
+        """
+        templates = self.browse(template_ids).exists()
+        company = self.env.company
+        return {
+            "settings": {
+                "match_threshold": company.olive_face_match_threshold,
+                "review_threshold": company.olive_face_review_threshold,
+            },
+            "items": [{
+                "id": t.id,
+                "employee_id": t.employee_id.id,
+                "employee": t.employee_id.display_name,
+                "name": t.name,
+                "source": t.source,
+                "embedding": t.embedding,
+            } for t in templates if t.embedding],
+        }
 
     def _sync_payload(self):
         """Representacion compacta para el sync hacia el kiosco."""
