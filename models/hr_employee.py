@@ -127,6 +127,7 @@ class HrEmployee(models.Model):
             lambda t: t.active and t.embedding
         )
         return {
+            "pipeline_version": self._olive_pipeline_version(),
             "employee": {"id": self.id, "name": self.name},
             "profile": profile._bootstrap_payload(),
             "settings": company._olive_face_client_settings(),
@@ -151,6 +152,20 @@ class HrEmployee(models.Model):
             "image": image_b64,
             "source": "camera",
         }).id
+
+    @api.model
+    def _olive_pipeline_version(self):
+        """Version del modulo, para versionar la URL del pipeline.
+
+        pipeline.js vive fuera de los bundles de assets (a proposito: son ~50 MB
+        que no deben cargarse para todo el mundo), asi que no recibe el
+        versionado automatico de Odoo y el navegador se queda con la copia
+        vieja. Colgar la version del modulo en la URL es lo que lo obliga a
+        volver a bajarlo cuando cambia.
+        """
+        module = self.env["ir.module.module"].sudo().search(
+            [("name", "=", "olive_hr_attendance_face")], limit=1)
+        return module.latest_version or "0"
 
     @api.model
     def olive_pending_photos_context(self, employee_ids=None):
@@ -183,6 +198,7 @@ class HrEmployee(models.Model):
         without_photo = employees.filtered(lambda e: not e.image_1920) - \
             employees.filtered(lambda e: e.olive_face_template_ids)
         return {
+            "pipeline_version": self._olive_pipeline_version(),
             "profile": profile._bootstrap_payload(),
             "settings": company._olive_face_client_settings(),
             "pending": [{

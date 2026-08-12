@@ -14,7 +14,10 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
 
-const PIPELINE_URL = "/olive_hr_attendance_face/static/lib/pipeline/pipeline.js";
+// La version va en la URL: sin ella el navegador se queda con la copia
+// cacheada del pipeline y los arreglos no llegan nunca al cliente.
+const PIPELINE_BASE = "/olive_hr_attendance_face/static/lib/pipeline/pipeline.js";
+const pipelineUrl = (v) => `${PIPELINE_BASE}?v=${encodeURIComponent(v || "0")}`;
 
 // En un retrato el rostro ocupa muchos pixeles. El minimo de la compania esta
 // pensado para alguien a metro y medio de la camara del kiosco, no para una foto.
@@ -56,7 +59,7 @@ export class FaceProcess extends Component {
             this.state.withoutPhoto = this.ctx.without_photo;
 
             this.state.progress = _t("Descargando modelos (solo la primera vez)...");
-            this.pipeline = await import(PIPELINE_URL);
+            this.pipeline = await import(pipelineUrl(this.ctx.pipeline_version));
             this.state.insecure = !this.pipeline.isSecureContext();
             await this.pipeline.init(this.ctx.profile, () => {});
             this.state.phase = "ready";
