@@ -28,6 +28,7 @@ class TestFold(TransactionCase):
         cls.company.partner_id.tz = "America/Guatemala"
         cls.company.write({
             "olive_face_toggle_gap_seconds": 60,
+            "olive_face_min_session_minutes": 15,
             "olive_face_max_shift_hours": 16.0,
             "olive_face_day_cutoff_hour": 0.0,
             "olive_face_protect_validated": True,
@@ -212,6 +213,62 @@ class TestFold(TransactionCase):
         self.assertEqual(len(self._attendances()), 1)
         self.assertEqual(
             len(self._our_punches().filtered(lambda p: p.state == "duplicate")), 1)
+
+    def test_marcaje_repetido_no_parte_la_jornada(self):
+        """El error mas caro del sistema, y el mas facil de cometer.
+
+        Marca a las 07:00, no ve confirmacion, vuelve a marcar a las 07:03. Por
+        pura alternancia ese segundo marcaje seria la SALIDA: tres minutos
+        trabajados, y la salida real de las 17:00 quedaria como una entrada
+        nueva. Un dia entero destruido por un doble toque.
+
+        Tres minutos superan el colapso de rafaga de 60 s, asi que la unica
+        defensa es la duracion minima de jornada.
+        """
+        self._punch(self._at(10, 13, 0))
+        self._punch(self._at(10, 13, 3))
+        self._punch(self._at(10, 23))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1, "La jornada se partio en dos")
+        self.assertEqual(attendances.check_in, self._at(10, 13, 0))
+        self.assertEqual(attendances.check_out, self._at(10, 23))
+        self.assertEqual(
+            len(self._our_punches().filtered(lambda p: p.state == "duplicate")), 1)
+
+    def test_dia_con_almuerzo(self):
+        """Cuatro marcajes legitimos son dos asistencias, no una."""
+        self._punch(self._at(10, 13))   # entra 07:00
+        self._punch(self._at(10, 18))   # sale 12:00
+        self._punch(self._at(10, 19))   # vuelve 13:00
+        self._punch(self._at(10, 23))   # sale 17:00
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 2)
+        self.assertEqual(attendances[0].check_out, self._at(10, 18))
+        self.assertEqual(attendances[1].check_in, self._at(10, 19))
+
+    def test_numero_impar_queda_senalado(self):
+        """Tres marcajes son ambiguos por naturaleza: los revisa una persona.
+
+        Entra, sale, y vuelve a entrar sin marcar la salida. No hay forma de
+        adivinar la hora real de salida, asi que se cierra a la fuerza y —lo
+        importante— queda marcado para revision en vez de pasar por bueno.
+        """
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 18))
+        self._punch(self._at(10, 20))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 2)
+        self.assertEqual(attendances[1].olive_anomaly, "forced_close")
+        self.assertTrue(
+            attendances[1].olive_needs_review,
+            "Una jornada cerrada a la fuerza tiene que llegar a un supervisor",
+        )
 
     def test_entrada_sobre_entrada(self):
         """Olvido marcar la salida y al dia siguiente vuelve a entrar.

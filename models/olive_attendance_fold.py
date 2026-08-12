@@ -207,6 +207,8 @@ class OliveAttendancePunch(models.Model):
         company = employee.company_id or self.env.company
         return {
             "toggle_gap": timedelta(seconds=company.olive_face_toggle_gap_seconds or 0),
+            "min_session": timedelta(
+                minutes=company.olive_face_min_session_minutes or 0),
             "max_shift_hours": company.olive_face_max_shift_hours or 16.0,
             "max_shift": timedelta(hours=company.olive_face_max_shift_hours or 16.0),
             "cutoff_hour": company.olive_face_day_cutoff_hour or 0.0,
@@ -356,6 +358,7 @@ class OliveAttendancePunch(models.Model):
 
         pairs = []
         rejected = self.browse()
+        repeats = self.browse()
         open_pair = None
         for event in events:
             direction = event["direction"]
@@ -382,6 +385,17 @@ class OliveAttendancePunch(models.Model):
                     # fabricar horas trabajadas que nadie registro.
                     rejected |= event["punch"]
                     continue
+
+                # Nadie entra y sale en diez minutos. Un par asi no es una
+                # jornada: es alguien que marco, no vio confirmacion, y volvio a
+                # marcar. Tratarlo como salida es el error MAS CARO del sistema
+                # —convierte un dia entero en tres minutos trabajados— asi que
+                # el segundo marcaje se colapsa y la entrada sigue abierta,
+                # esperando la salida de verdad.
+                if event["time"] - open_pair["check_in"] < params["min_session"]:
+                    repeats |= event["punch"]
+                    continue
+
                 open_pair["check_out"] = event["time"]
                 open_pair["out_punch"] = event["punch"]
                 pairs.append(open_pair)
@@ -401,6 +415,14 @@ class OliveAttendancePunch(models.Model):
                 open_pair["anomaly"] = "forced_close"
             pairs.append(open_pair)
 
+        if repeats:
+            repeats.write({
+                "state": "duplicate",
+                "error_message": _(
+                    "Marcaje repetido: la persona ya habia marcado hace muy poco. "
+                    "Se descarta para no partir la jornada en dos."
+                ),
+            })
         return pairs, rejected
 
     # ==================================================================

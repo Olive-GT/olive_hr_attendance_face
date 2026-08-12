@@ -14,6 +14,12 @@
               action="action_olive_attendance_punch_review"
               sequence="10"/>
 
+    <menuitem id="menu_olive_face_anomaly"
+              name="Asistencias a revisar"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_anomaly"
+              sequence="15"/>
+
     <menuitem id="menu_olive_face_punch"
               name="Todos los marcajes"
               parent="menu_olive_face_root"

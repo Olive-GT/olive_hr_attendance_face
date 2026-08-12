@@ -92,6 +92,15 @@ class ResCompany(models.Model):
     olive_face_toggle_gap_seconds = fields.Integer(
         default=60, string="Colapso de rafaga (s)",
     )
+    olive_face_min_session_minutes = fields.Integer(
+        default=15, string="Duracion minima de una jornada (min)",
+        help="Un par entrada/salida mas corto que esto no se considera una "
+             "jornada real sino que la persona marco dos veces por no estar "
+             "segura de haber registrado. El segundo marcaje se colapsa.\n\n"
+             "Es la defensa contra el error mas caro del sistema: sin ella, "
+             "marcar dos veces al entrar convierte el dia entero en tres "
+             "minutos trabajados.",
+    )
     olive_face_max_shift_hours = fields.Float(
         default=16.0, string="Jornada maxima (h)",
         help="Una asistencia abierta que supere esto se cierra a la fuerza. Es "
