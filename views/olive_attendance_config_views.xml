@@ -202,6 +202,12 @@
                                 <field name="olive_face_toggle_gap_seconds"/></div>
                             <div class="row"><label for="olive_face_min_session_minutes" class="col-lg-6 o_light_label"/>
                                 <field name="olive_face_min_session_minutes"/></div>
+                            <div class="row"><label for="olive_face_presence_first" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_presence_first"/></div>
+                            <div class="row"><label for="olive_face_expected_min_hours" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_expected_min_hours"/></div>
+                            <div class="row"><label for="olive_face_expected_max_hours" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_expected_max_hours"/></div>
                             <div class="row"><label for="olive_face_max_shift_hours" class="col-lg-6 o_light_label"/>
                                 <field name="olive_face_max_shift_hours"/></div>
                             <div class="row"><label for="olive_face_day_cutoff_hour" class="col-lg-6 o_light_label"/>

@@ -44,6 +44,12 @@ class ResConfigSettings(models.TransientModel):
         related="company_id.olive_face_toggle_gap_seconds", readonly=False)
     olive_face_min_session_minutes = fields.Integer(
         related="company_id.olive_face_min_session_minutes", readonly=False)
+    olive_face_presence_first = fields.Boolean(
+        related="company_id.olive_face_presence_first", readonly=False)
+    olive_face_expected_min_hours = fields.Float(
+        related="company_id.olive_face_expected_min_hours", readonly=False)
+    olive_face_expected_max_hours = fields.Float(
+        related="company_id.olive_face_expected_max_hours", readonly=False)
     olive_face_max_shift_hours = fields.Float(
         related="company_id.olive_face_max_shift_hours", readonly=False)
     olive_face_day_cutoff_hour = fields.Float(

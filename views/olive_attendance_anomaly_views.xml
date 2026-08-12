@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_olive_attendance_anomaly_list" model="ir.ui.view">
+        <field name="name">olive.attendance.anomaly.list</field>
+        <field name="model">olive.attendance.anomaly</field>
+        <field name="arch" type="xml">
+            <list create="false"
+                  decoration-danger="severity == 'critical'"
+                  decoration-warning="severity == 'warning'"
+                  decoration-muted="state != 'open'">
+                <field name="anomaly_date"/>
+                <field name="employee_id"/>
+                <field name="kind"/>
+                <field name="severity"/>
+                <field name="detail"/>
+                <field name="resolution" optional="show"/>
+                <field name="attendance_recorded" string="Presencia OK" optional="show"/>
+                <field name="attendance_id" optional="hide"/>
+                <field name="state"/>
+                <button name="action_review" type="object" string="Revisada"
+                        icon="fa-check" invisible="state != 'open'"/>
+                <button name="action_dismiss" type="object" string="Descartar"
+                        icon="fa-times" invisible="state != 'open'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_anomaly_form" model="ir.ui.view">
+        <field name="name">olive.attendance.anomaly.form</field>
+        <field name="model">olive.attendance.anomaly</field>
+        <field name="arch" type="xml">
+            <form create="false">
+                <header>
+                    <button name="action_review" type="object" string="Marcar revisada"
+                            class="btn-primary" invisible="state != 'open'"/>
+                    <button name="action_dismiss" type="object" string="Descartar"
+                            invisible="state != 'open'"/>
+                    <button name="action_reopen" type="object" string="Reabrir"
+                            invisible="state == 'open'"/>
+                    <button name="action_open_attendance" type="object"
+                            string="Ver la asistencia" invisible="not attendance_id"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-danger" role="alert"
+                         invisible="attendance_recorded">
+                        <b>Ese dia no quedo constancia de presencia.</b>
+                        Es lo unico realmente costoso: la nomina asume asistencia y
+                        descuenta por ausencias, asi que una presencia perdida si
+                        cuesta dinero. Hay que resolverlo a mano.
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="kind" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="employee_id"
+                                   placeholder="Sin identificar"/>
+                            <field name="anomaly_date"/>
+                            <field name="severity"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="attendance_recorded"/>
+                            <field name="attendance_id"/>
+                            <field name="reviewed_by_uid"/>
+                            <field name="reviewed_date"/>
+                        </group>
+                    </group>
+                    <group string="Que paso">
+                        <field name="detail" nolabel="1" readonly="1"/>
+                    </group>
+                    <group string="Que hizo el sistema">
+                        <field name="resolution" nolabel="1" readonly="1"/>
+                    </group>
+                    <group string="Nota de revision">
+                        <field name="resolution_note" nolabel="1"
+                               placeholder="Que se decidio y por que..."/>
+                    </group>
+                    <notebook>
+                        <page string="Marcajes involucrados">
+                            <field name="punch_ids" readonly="1">
+                                <list>
+                                    <field name="punch_time"/>
+                                    <field name="device_time"/>
+                                    <field name="direction"/>
+                                    <field name="method"/>
+                                    <field name="match_score"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <field name="fingerprint" invisible="1"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_anomaly_search" model="ir.ui.view">
+        <field name="name">olive.attendance.anomaly.search</field>
+        <field name="model">olive.attendance.anomaly</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="employee_id"/>
+                <field name="kind"/>
+                <filter name="f_open" string="Abiertas" domain="[('state', '=', 'open')]"/>
+                <filter name="f_critical" string="Graves"
+                        domain="[('severity', '=', 'critical')]"/>
+                <!-- El filtro que de verdad importa: los dias en que se perdio
+                     la constancia de que la persona estuvo. -->
+                <filter name="f_lost" string="Sin constancia de presencia"
+                        domain="[('attendance_recorded', '=', False)]"/>
+                <separator/>
+                <filter name="f_today" string="Hoy"
+                        domain="[('anomaly_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="f_month" string="Ultimos 30 dias"
+                        domain="[('anomaly_date', '&gt;=', (context_today() - relativedelta(days=30)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="g_kind" string="Tipo" context="{'group_by': 'kind'}"/>
+                    <filter name="g_employee" string="Empleado"
+                            context="{'group_by': 'employee_id'}"/>
+                    <filter name="g_severity" string="Gravedad"
+                            context="{'group_by': 'severity'}"/>
+                    <filter name="g_date" string="Jornada"
+                            context="{'group_by': 'anomaly_date'}"/>
+                    <filter name="g_state" string="Estado" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_anomaly_graph" model="ir.ui.view">
+        <field name="name">olive.attendance.anomaly.graph</field>
+        <field name="model">olive.attendance.anomaly</field>
+        <field name="arch" type="xml">
+            <graph type="bar" sample="1">
+                <field name="anomaly_date" interval="day"/>
+                <field name="kind"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_anomaly_pivot" model="ir.ui.view">
+        <field name="name">olive.attendance.anomaly.pivot</field>
+        <field name="model">olive.attendance.anomaly</field>
+        <field name="arch" type="xml">
+            <pivot sample="1">
+                <field name="employee_id" type="row"/>
+                <field name="kind" type="col"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="action_olive_attendance_anomaly" model="ir.actions.act_window">
+        <field name="name">Incidencias de marcaje</field>
+        <field name="res_model">olive.attendance.anomaly</field>
+        <field name="view_mode">list,form,graph,pivot</field>
+        <field name="context">{'search_default_f_open': 1, 'search_default_g_kind': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Todo marcho normal</p>
+            <p>Aqui se guarda todo lo que no salio como se esperaba: marcajes
+               repetidos, jornadas de duracion rara, dias con marcajes incompletos,
+               identificaciones dudosas.</p>
+            <p>La asistencia se registra igual. Esto no bloquea nada: existe para
+               que nada raro pase inadvertido y se pueda revisar despues.</p>
+        </field>
+    </record>
+
+</odoo>

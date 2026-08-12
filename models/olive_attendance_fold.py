@@ -124,6 +124,17 @@ class OliveAttendancePunch(models.Model):
                 "error_message": _("Marcaje sin empleado identificado."),
             })
             quarantined |= orphans
+            for punch in orphans:
+                # `attendance_recorded=False`: es el unico caso donde de verdad
+                # se pierde una presencia, porque no se sabe de quien es. Por eso
+                # entra como grave.
+                self._record_punch_anomaly(
+                    punch, "unidentified",
+                    _("El kiosco no logro identificar a la persona."),
+                    _("No se registro ninguna asistencia: no se sabe a quien "
+                      "corresponde. Hay que asignarle un empleado a mano."),
+                    attendance_recorded=False,
+                )
 
         # Reloj inservible: si murio la pila del CMOS, la hora es basura y no
         # puede llegar a la nomina disfrazada de dato.
@@ -139,7 +150,32 @@ class OliveAttendancePunch(models.Model):
                 ),
             })
             quarantined |= broken_clock
+            for punch in broken_clock:
+                self._record_punch_anomaly(
+                    punch, "clock_unreliable",
+                    _("El reloj del equipo estaba mal cuando se marco."),
+                    _("No se registro asistencia: no se sabe ni siquiera de que "
+                      "dia es. La hora cruda queda guardada como evidencia."),
+                    attendance_recorded=False,
+                )
         return quarantined
+
+    def _record_punch_anomaly(self, punch, kind, detail, resolution,
+                              attendance_recorded=True):
+        """Incidencia atada a un marcaje suelto, sin jornada reconstruida."""
+        company = punch.company_id or self.env.company
+        tz = timezone(
+            (punch.employee_id and punch.employee_id.tz)
+            or company.partner_id.tz or "UTC"
+        )
+        cutoff = company.olive_face_day_cutoff_hour or 0.0
+        self.env["olive.attendance.anomaly"]._record(
+            punch.employee_id or None,
+            self._jornada_date(punch.punch_time, tz, cutoff),
+            kind, detail, resolution,
+            punches=punch, key=punch.uuid,
+            attendance_recorded=attendance_recorded,
+        )
 
     # ==================================================================
     # Paso 0 — ambitos
@@ -213,7 +249,16 @@ class OliveAttendancePunch(models.Model):
             "max_shift": timedelta(hours=company.olive_face_max_shift_hours or 16.0),
             "cutoff_hour": company.olive_face_day_cutoff_hour or 0.0,
             "protect_validated": company.olive_face_protect_validated,
+            "presence_first": company.olive_face_presence_first,
+            "expected_min": timedelta(hours=company.olive_face_expected_min_hours or 0),
+            "expected_max": timedelta(
+                hours=company.olive_face_expected_max_hours or 24),
         }
+
+    def _jornada_date(self, moment, tz, cutoff_hour):
+        """Fecha local de la jornada a la que pertenece un instante."""
+        local = utc.localize(moment).astimezone(tz)
+        return (local - timedelta(hours=cutoff_hour)).date()
 
     # ==================================================================
     # Reconstruccion de un ambito
@@ -230,11 +275,38 @@ class OliveAttendancePunch(models.Model):
         )
 
         params = self._fold_params(employee)
+        tz = self._employee_tz(employee)
         punches, managed, immutable = self._collect_events(
             employee, dt_from, dt_to, params)
-        pairs, rejected = self._normalize_sequence(punches, params)
 
+        # Las incidencias abiertas son derivadas, igual que las asistencias: si
+        # la jornada se rehace, se recalculan. Las ya revisadas se conservan —
+        # son decisiones humanas y no se borran solas.
+        Anomaly = self.env["olive.attendance.anomaly"]
+        Anomaly._clear_open(
+            employee,
+            self._jornada_date(dt_from, tz, params["cutoff_hour"]),
+            self._jornada_date(dt_to, tz, params["cutoff_hour"]),
+        )
+
+        pairs, rejected, notes = self._normalize_sequence(punches, params)
         result = self._apply_pairs(employee, pairs, managed, immutable, params)
+
+        # Cada incidencia queda enlazada a la asistencia que produjo, para que
+        # desde el portal se salte directo al registro afectado.
+        by_uuid = {
+            pair["in_punch"].uuid: pair.get("attendance")
+            for pair in pairs if pair.get("in_punch")
+        }
+        for note in notes:
+            Anomaly._record(
+                employee,
+                self._jornada_date(note["moment"], tz, params["cutoff_hour"]),
+                note["kind"], note["detail"], note["resolution"],
+                punches=note.get("punches"), key=note.get("key", ""),
+                attendance=by_uuid.get(note.get("key")),
+            )
+
         if rejected:
             rejected.write({
                 "state": "rejected", "review_state": "pending",
@@ -334,6 +406,7 @@ class OliveAttendancePunch(models.Model):
         Es donde se tratan los casos degenerados. Ninguno es teorico: todos
         pasan en una planta real en la primera semana.
         """
+        notes = []
         events = []
         last_kept = None
         bursts = self.browse()
@@ -355,6 +428,11 @@ class OliveAttendancePunch(models.Model):
                 "state": "duplicate",
                 "error_message": _("Colapsado por cercania con el marcaje anterior."),
             })
+            notes.append({
+                "kind": "burst", "moment": bursts[0].punch_time, "punches": bursts,
+                "detail": _("%s marcaje(s) a segundos del anterior.", len(bursts)),
+                "resolution": _("Se descartaron por repetidos. No afectan la jornada."),
+            })
 
         pairs = []
         rejected = self.browse()
@@ -374,6 +452,17 @@ class OliveAttendancePunch(models.Model):
                     limit = open_pair["check_in"] + params["max_shift"]
                     open_pair["check_out"] = min(limit, event["time"])
                     open_pair["anomaly"] = "missing_out"
+                    notes.append({
+                        "kind": "missing_out", "moment": open_pair["check_in"],
+                        "punches": open_pair["in_punch"],
+                        "key": open_pair["in_punch"].uuid,
+                        "detail": _(
+                            "Entro y volvio a entrar sin marcar la salida "
+                            "intermedia."),
+                        "resolution": _(
+                            "Se registro la presencia y se cerro al comenzar la "
+                            "siguiente. La hora de salida real se desconoce."),
+                    })
                     pairs.append(open_pair)
                 open_pair = {
                     "check_in": event["time"], "in_punch": event["punch"],
@@ -381,9 +470,35 @@ class OliveAttendancePunch(models.Model):
                 }
             else:
                 if not open_pair:
-                    # Salida sin entrada. No se inventa una entrada: seria
-                    # fabricar horas trabajadas que nadie registro.
-                    rejected |= event["punch"]
+                    # Salida sin entrada. Alguien marco al salir pero su entrada
+                    # nunca llego —el kiosco no lo reconocio al entrar, o su
+                    # marcaje se perdio—.
+                    #
+                    # La hora de entrada es imposible de saber, pero la
+                    # PRESENCIA es un hecho: esa persona estuvo ahi. Y la
+                    # presencia es justamente lo que importa, porque la nomina
+                    # asume asistencia y descuenta por ausencias. Descartar el
+                    # marcaje por no conocer una hora seria tirar el dato
+                    # valioso por no tener el accesorio.
+                    if not params["presence_first"]:
+                        rejected |= event["punch"]
+                        continue
+                    pairs.append({
+                        "check_in": event["time"],
+                        "check_out": event["time"] + timedelta(minutes=1),
+                        "in_punch": event["punch"], "out_punch": None,
+                        "anomaly": "missing_out", "synthetic": True,
+                    })
+                    notes.append({
+                        "kind": "orphan_out", "moment": event["time"],
+                        "punches": event["punch"], "key": event["punch"].uuid,
+                        "detail": _(
+                            "Marco la salida sin que existiera una entrada previa."),
+                        "resolution": _(
+                            "Se dejo constancia de la presencia con duracion "
+                            "simbolica. La hora de entrada real se desconoce y "
+                            "hay que corregirla a mano si importa."),
+                    })
                     continue
 
                 # Nadie entra y sale en diez minutos. Un par asi no es una
@@ -394,6 +509,17 @@ class OliveAttendancePunch(models.Model):
                 # esperando la salida de verdad.
                 if event["time"] - open_pair["check_in"] < params["min_session"]:
                     repeats |= event["punch"]
+                    notes.append({
+                        "kind": "repeated_punch", "moment": event["time"],
+                        "punches": event["punch"], "key": event["punch"].uuid,
+                        "detail": _(
+                            "Volvio a marcar a los %s minutos de haber marcado.",
+                            int((event["time"] - open_pair["check_in"])
+                                .total_seconds() // 60)),
+                        "resolution": _(
+                            "Se tomo como repeticion, no como salida. La jornada "
+                            "sigue abierta esperando la salida real."),
+                    })
                     continue
 
                 open_pair["check_out"] = event["time"]
@@ -413,6 +539,17 @@ class OliveAttendancePunch(models.Model):
             if elapsed > params["max_shift"]:
                 open_pair["check_out"] = open_pair["check_in"] + params["max_shift"]
                 open_pair["anomaly"] = "forced_close"
+                notes.append({
+                    "kind": "forced_close", "moment": open_pair["check_in"],
+                    "punches": open_pair["in_punch"],
+                    "key": open_pair["in_punch"].uuid,
+                    "detail": _("Entro y nunca marco la salida."),
+                    "resolution": _(
+                        "Se cerro a la fuerza a las %s horas. La presencia queda "
+                        "registrada; la hora de salida es inventada y no debe "
+                        "usarse para calcular horas.",
+                        params["max_shift"].total_seconds() / 3600),
+                })
             pairs.append(open_pair)
 
         if repeats:
@@ -423,7 +560,41 @@ class OliveAttendancePunch(models.Model):
                     "Se descarta para no partir la jornada en dos."
                 ),
             })
-        return pairs, rejected
+
+        # Un numero impar de marcajes significa que falta uno. Es ambiguo por
+        # naturaleza —no hay forma de saber cual falta— asi que no se resuelve,
+        # se senala.
+        if len(events) % 2 == 1:
+            notes.append({
+                "kind": "odd_count", "moment": events[0]["time"],
+                "punches": self.browse([e["punch"].id for e in events]),
+                "detail": _("%s marcajes en la jornada: falta uno.", len(events)),
+                "resolution": _(
+                    "La asistencia quedo registrada, pero alguna de sus horas "
+                    "es una suposicion del sistema."),
+            })
+
+        # Jornadas de duracion rara. No bloquean nada; solo se marcan.
+        for pair in pairs:
+            if pair.get("synthetic") or not pair["check_out"]:
+                continue
+            duration = pair["check_out"] - pair["check_in"]
+            kind = None
+            if duration < params["expected_min"]:
+                kind = "short_session"
+            elif duration > params["expected_max"]:
+                kind = "long_session"
+            if kind:
+                notes.append({
+                    "kind": kind, "moment": pair["check_in"],
+                    "punches": pair["in_punch"], "key": pair["in_punch"].uuid,
+                    "detail": _(
+                        "Jornada de %.1f horas.",
+                        duration.total_seconds() / 3600),
+                    "resolution": _("Se registro tal cual. Solo se marca por rara."),
+                })
+
+        return pairs, rejected, notes
 
     # ==================================================================
     # Paso 4 — escribir (el orden importa)
@@ -460,6 +631,7 @@ class OliveAttendancePunch(models.Model):
                 if attendance else False
             if attendance and attendance.check_in == pair["check_in"] and same_out:
                 unchanged |= attendance
+                pair["attendance"] = attendance
                 continue
             pair["previous"] = attendance
             to_create.append(pair)
@@ -498,6 +670,7 @@ class OliveAttendancePunch(models.Model):
             if pair.get("previous"):
                 values["olive_rebuilt_count"] = pair["previous"].olive_rebuilt_count + 1
             attendance = Attendance.create(values)
+            pair["attendance"] = attendance
 
             pair["in_punch"].sudo().write({
                 "state": "applied", "attendance_id": attendance.id,
@@ -543,6 +716,22 @@ class OliveAttendancePunch(models.Model):
                 "es correcto."
             ),
         })
+        params = self._fold_params(employee)
+        tz = self._employee_tz(employee)
+        for pair in blocked:
+            self.env["olive.attendance.anomaly"]._record(
+                employee,
+                self._jornada_date(pair["check_in"], tz, params["cutoff_hour"]),
+                "immutable_conflict",
+                _("El kiosco registro marcajes en un horario que ya tenia una "
+                  "asistencia cargada a mano."),
+                # La presencia no se pierde: la asistencia manual ya la
+                # acredita. Lo que se pierde es la hora exacta del kiosco.
+                _("No se toco el registro manual. Los marcajes del kiosco se "
+                  "descartaron; hay que decidir cual de los dos horarios vale."),
+                punches=pair["in_punch"] | (pair["out_punch"] or self.browse()),
+                key=pair["in_punch"].uuid,
+            )
         self._notify_manager(employee, _(
             "Marcajes del kiosco en conflicto con asistencias registradas a mano "
             "para %s. Requieren decision manual.", employee.display_name,

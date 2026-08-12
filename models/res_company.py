@@ -112,6 +112,22 @@ class ResCompany(models.Model):
         help="0 = el dia va de medianoche a medianoche. Ponerlo en 4.0 para "
              "turnos nocturnos que cruzan la medianoche.",
     )
+    olive_face_presence_first = fields.Boolean(
+        default=True, string="Registrar siempre la asistencia",
+        help="Ante un marcaje ambiguo, dejar constancia de la presencia y "
+             "levantar una incidencia, en vez de descartarlo.\n\n"
+             "Es lo correcto cuando la nomina asume asistencia del 100% y "
+             "descuenta por ausencias: una hora imprecisa no cuesta dinero, "
+             "pero un dia de presencia perdido si.",
+    )
+    olive_face_expected_min_hours = fields.Float(
+        default=4.0, string="Jornada esperada minima (h)",
+        help="Por debajo de esto se levanta una incidencia. No bloquea nada: "
+             "solo lo marca para que alguien lo mire.",
+    )
+    olive_face_expected_max_hours = fields.Float(
+        default=12.0, string="Jornada esperada maxima (h)",
+    )
     olive_face_protect_validated = fields.Boolean(
         default=True, string="Proteger horas extra aprobadas",
     )

@@ -29,6 +29,9 @@ class TestFold(TransactionCase):
         cls.company.write({
             "olive_face_toggle_gap_seconds": 60,
             "olive_face_min_session_minutes": 15,
+            "olive_face_presence_first": True,
+            "olive_face_expected_min_hours": 4.0,
+            "olive_face_expected_max_hours": 12.0,
             "olive_face_max_shift_hours": 16.0,
             "olive_face_day_cutoff_hour": 0.0,
             "olive_face_protect_validated": True,
@@ -64,6 +67,12 @@ class TestFold(TransactionCase):
     def _our_punches(self):
         """Solo los marcajes de este test: la base puede tener otros."""
         return self.Punch.sudo().search([("device_id", "=", self.device.id)])
+
+    def _anomalies(self, kind=None, employee=None):
+        domain = [("employee_id", "=", (employee or self.employee).id)]
+        if kind:
+            domain.append(("kind", "=", kind))
+        return self.env["olive.attendance.anomaly"].sudo().search(domain)
 
     def _attendances(self, employee=None):
         return self.Attendance.sudo().search(
@@ -287,14 +296,96 @@ class TestFold(TransactionCase):
         self.assertEqual(attendances[0].olive_anomaly, "missing_out")
         self.assertLessEqual(attendances[0].check_out, attendances[1].check_in)
 
-    def test_salida_huerfana_se_rechaza(self):
-        """No se inventa una entrada: seria fabricar horas que nadie registro."""
+    def test_salida_huerfana_deja_constancia_de_presencia(self):
+        """La hora se desconoce, pero la presencia es un hecho.
+
+        La nomina asume asistencia y descuenta por ausencias, asi que una hora
+        imprecisa no cuesta dinero pero un dia de presencia perdido si. Por eso
+        se registra la asistencia igual y se levanta una incidencia, en vez de
+        descartar el marcaje.
+        """
         salida = self._punch(self._at(10, 23), direction="out")
         self._fold()
 
-        self.assertEqual(len(self._attendances()), 0)
-        self.assertEqual(salida.state, "rejected")
-        self.assertEqual(salida.review_state, "pending")
+        self.assertEqual(len(self._attendances()), 1, "Se perdio la presencia")
+        self.assertEqual(salida.state, "applied")
+        incidencia = self._anomalies("orphan_out")
+        self.assertEqual(len(incidencia), 1)
+        self.assertTrue(incidencia.attendance_recorded)
+
+    # ==================================================================
+    # Incidencias: nada raro pasa inadvertido
+    # ==================================================================
+
+    def test_incidencia_por_marcaje_repetido(self):
+        self._punch(self._at(10, 13, 0))
+        self._punch(self._at(10, 13, 3))
+        self._punch(self._at(10, 23))
+        self._fold()
+
+        incidencia = self._anomalies("repeated_punch")
+        self.assertEqual(len(incidencia), 1)
+        self.assertEqual(incidencia.severity, "info")
+        self.assertTrue(incidencia.detail)
+        self.assertTrue(incidencia.resolution, "Hay que decir que hizo el sistema")
+
+    def test_incidencia_por_jornada_corta(self):
+        """Una jornada de 2 h con la esperada en 4 h se marca, pero no se toca."""
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 15))
+        self._fold()
+
+        self.assertEqual(len(self._attendances()), 1, "No debe bloquear nada")
+        self.assertEqual(len(self._anomalies("short_session")), 1)
+
+    def test_incidencia_por_numero_impar(self):
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 18))
+        self._punch(self._at(10, 20))
+        self._fold()
+
+        self.assertEqual(len(self._anomalies("odd_count")), 1)
+
+    def test_marcaje_sin_identificar_es_grave(self):
+        """El unico caso donde de verdad se pierde una presencia."""
+        self.Punch.sudo().create({
+            "uuid": uuid.uuid4().hex, "device_id": self.device.id,
+            "device_time": self._at(10, 13), "punch_time": self._at(10, 13),
+            "employee_id": False,
+        })
+        self._fold()
+
+        incidencia = self.env["olive.attendance.anomaly"].sudo().search([
+            ("kind", "=", "unidentified"), ("company_id", "=", self.company.id),
+        ])
+        self.assertEqual(len(incidencia), 1)
+        self.assertEqual(incidencia.severity, "critical")
+        self.assertFalse(
+            incidencia.attendance_recorded,
+            "Sin empleado no hay presencia registrada, y eso si cuesta dinero",
+        )
+
+    def test_incidencias_no_se_duplican_al_rehacer(self):
+        """Reconstruir diez veces la jornada no genera diez incidencias."""
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 15))
+        self._fold()
+        self.assertEqual(len(self._anomalies("short_session")), 1)
+
+        self.Punch.sudo()._fold_pending(punch_ids=self._our_punches().ids)
+        self.assertEqual(len(self._anomalies("short_session")), 1)
+
+    def test_incidencia_revisada_sobrevive_la_reconstruccion(self):
+        """Una decision humana no se borra sola al rehacer la jornada."""
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 15))
+        self._fold()
+        incidencia = self._anomalies("short_session")
+        incidencia.action_review()
+
+        self.Punch.sudo()._fold_pending(punch_ids=self._our_punches().ids)
+        self.assertTrue(incidencia.exists(), "Se borro una incidencia ya revisada")
+        self.assertEqual(incidencia.state, "reviewed")
 
     def test_turno_cruzando_medianoche(self):
         """22:00 a 06:00 es UN turno, no dos jornadas partidas.

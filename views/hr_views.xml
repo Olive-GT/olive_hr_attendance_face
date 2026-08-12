@@ -34,10 +34,10 @@
                             class="btn-link" colspan="2"/>
                     <div class="text-muted" colspan="2">
                         La foto de la ficha se usa automaticamente. Para que rinda mas,
-                        agrega capturas con la camara en las condiciones reales del
-                        kiosco: con el casco y los lentes puestos, y con su misma luz.
-                        Capturar en otras condiciones es la causa mas comun de que
-                        despues no reconozca en la caseta.
+                        agrega capturas con la camara del kiosco y bajo su misma luz.
+                        El registro va antes de la zona de obra, asi que se captura a
+                        cara descubierta; lo que si conviene repetir es lo que la
+                        persona cambia de un dia a otro: lentes graduados y gorra.
                     </div>
                 </group>
             </xpath>
@@ -61,7 +61,7 @@
          cerrado a la fuerza, es un dia que alguien tiene que mirar: son horas
          que van a nomina. Sin esta pantalla las anomalias existen en la base y
          nadie se entera. -->
-    <record id="action_olive_attendance_anomaly" model="ir.actions.act_window">
+    <record id="action_olive_attendance_anomaly_hr" model="ir.actions.act_window">
         <field name="name">Asistencias a revisar</field>
         <field name="res_model">hr.attendance</field>
         <field name="view_mode">list,form</field>
