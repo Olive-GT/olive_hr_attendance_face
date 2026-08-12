@@ -6,6 +6,7 @@ from . import olive_attendance_face_template
 from . import olive_attendance_sync_batch
 from . import olive_attendance_tombstone
 from . import olive_attendance_punch
+from . import olive_attendance_fold
 from . import hr_attendance
 from . import hr_employee
 from . import res_company

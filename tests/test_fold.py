@@ -1,0 +1,348 @@
+# -*- coding: utf-8 -*-
+"""Tests del doblado — la pieza de mayor riesgo del proyecto.
+
+Cada test de aqui corresponde a algo que pasa de verdad en una planta con un
+kiosco offline. Ninguno es teorico: el kiosco se queda sin red, alguien olvida
+marcar la salida, RRHH registra una entrada a mano, se corta la luz a mitad de
+turno. Si el doblado no aguanta estos casos, la nomina sale mal.
+
+Correr con:  odoo -d BASE --test-tags olive_face --stop-after-init
+"""
+
+import uuid
+from datetime import datetime, timedelta
+
+from odoo import fields
+from odoo.tests import TransactionCase, tagged
+
+
+@tagged("post_install", "-at_install", "olive_face")
+class TestFold(TransactionCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company = cls.env["res.company"].create({"name": "Planta Test"})
+        # Zona fija y sin horario de verano: las horas de los tests son
+        # predecibles y no dependen de donde corra la suite.
+        cls.company.partner_id.tz = "America/Guatemala"
+        cls.company.write({
+            "olive_face_toggle_gap_seconds": 60,
+            "olive_face_max_shift_hours": 16.0,
+            "olive_face_day_cutoff_hour": 0.0,
+            "olive_face_protect_validated": True,
+        })
+        cls.employee = cls.env["hr.employee"].create({
+            "name": "Empleado Prueba", "company_id": cls.company.id,
+            "tz": "America/Guatemala",
+        })
+        cls.device = cls.env["olive.attendance.device"].sudo().create({
+            "name": "Kiosco Test", "company_id": cls.company.id,
+        })
+        cls.Punch = cls.env["olive.attendance.punch"]
+        cls.Attendance = cls.env["hr.attendance"]
+
+    # -- utilidades -------------------------------------------------------
+
+    def _punch(self, when, direction="auto", employee=None, **extra):
+        """Crea un marcaje crudo. `when` es UTC ingenuo, como lo guarda Odoo."""
+        values = {
+            "uuid": uuid.uuid4().hex,
+            "device_id": self.device.id,
+            "device_time": when,
+            "punch_time": when,
+            "employee_id": (employee or self.employee).id,
+            "direction": direction,
+        }
+        values.update(extra)
+        return self.Punch.sudo().create(values)
+
+    def _fold(self):
+        return self.Punch.sudo()._fold_pending()
+
+    def _our_punches(self):
+        """Solo los marcajes de este test: la base puede tener otros."""
+        return self.Punch.sudo().search([("device_id", "=", self.device.id)])
+
+    def _attendances(self, employee=None):
+        return self.Attendance.sudo().search(
+            [("employee_id", "=", (employee or self.employee).id)],
+            order="check_in asc",
+        )
+
+    @staticmethod
+    def _at(day, hour, minute=0):
+        """Un instante UTC ingenuo del dia indicado."""
+        return datetime(2026, 3, day, hour, minute, 0)
+
+    # ==================================================================
+    # El camino feliz y su idempotencia
+    # ==================================================================
+
+    def test_par_simple(self):
+        """Entrada y salida producen una asistencia cerrada."""
+        self._punch(self._at(10, 13))   # 07:00 local
+        self._punch(self._at(10, 23))   # 17:00 local
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1)
+        self.assertEqual(attendances.check_in, self._at(10, 13))
+        self.assertEqual(attendances.check_out, self._at(10, 23))
+        self.assertTrue(attendances.olive_is_managed)
+        self.assertEqual(set(self._our_punches().mapped("state")), {"applied"})
+
+    def test_doblar_dos_veces_no_cambia_nada(self):
+        """Idempotencia: la segunda pasada no debe reescribir ni duplicar.
+
+        Si esto falla, el cron reescribiria las asistencias cada 10 minutos y
+        cualquier referencia externa a su id quedaria rota sin aviso.
+        """
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 23))
+        self._fold()
+        first = self._attendances()
+        first_id = first.id
+
+        self.Punch.sudo()._fold_pending(punch_ids=self._our_punches().ids)
+        again = self._attendances()
+        self.assertEqual(len(again), 1)
+        self.assertEqual(again.id, first_id, "La asistencia se reconstruyo sin necesidad")
+        self.assertEqual(again.olive_rebuilt_count, 0)
+
+    def test_uuid_duplicado_no_entra(self):
+        """La restriccion de UUID es TODA la idempotencia del reenvio."""
+        from psycopg2 import IntegrityError
+
+        from odoo.tools import mute_logger
+
+        shared = uuid.uuid4().hex
+        self._punch(self._at(10, 13), uuid=shared)
+        with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"):
+            with self.env.cr.savepoint():
+                self._punch(self._at(10, 14), uuid=shared)
+                self.env.flush_all()
+
+    # ==================================================================
+    # Lo que hace falta el diseno entero: llegada tardia y desordenada
+    # ==================================================================
+
+    def test_llegada_desordenada(self):
+        """Creados al reves, pero con su hora real: el resultado es el mismo.
+
+        El kiosco puede vaciar la cola en cualquier orden. El doblado ordena por
+        `punch_time`, no por orden de llegada.
+        """
+        self._punch(self._at(10, 23))   # la salida se crea primero
+        self._punch(self._at(10, 13))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1)
+        self.assertEqual(attendances.check_in, self._at(10, 13))
+        self.assertEqual(attendances.check_out, self._at(10, 23))
+
+    def test_llegada_tardia_entre_asistencias_existentes(self):
+        """El caso que rompe la insercion directa contra _check_validity.
+
+        El kiosco estuvo sin red el dia 10. Mientras tanto se doblaron los dias
+        11 y 12. Ahora llegan los marcajes viejos, que caen ENTRE asistencias ya
+        escritas: insercion 'intermedia', prohibida por el core. Reconstruyendo
+        la ventana no hay conflicto, porque el dia 10 se construye entero y
+        aparte.
+        """
+        for day in (11, 12):
+            self._punch(self._at(day, 13))
+            self._punch(self._at(day, 23))
+        self._fold()
+        self.assertEqual(len(self._attendances()), 2)
+
+        # Ahora si, los marcajes atrasados del dia 10.
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 23))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 3)
+        self.assertEqual(attendances[0].check_in, self._at(10, 13))
+        self.assertEqual(
+            set(self._our_punches().mapped("state")), {"applied"},
+            "Algun marcaje quedo sin aplicar",
+        )
+
+    def test_marcaje_tardio_reconstruye_su_dia(self):
+        """Un marcaje viejo que cambia un dia ya doblado lo reconstruye.
+
+        Llega la salida que faltaba de un dia cerrado a la fuerza. La asistencia
+        se rehace con la hora correcta y queda constancia de la reconstruccion.
+        """
+        # Horas recientes a proposito: una entrada vieja se cerraria a la fuerza
+        # por jornada maxima y el test estaria midiendo otra cosa.
+        entrada_time = fields.Datetime.now() - timedelta(hours=3)
+        salida_time = fields.Datetime.now() - timedelta(hours=1)
+
+        entrada = self._punch(entrada_time)
+        self._fold()
+        self.assertEqual(len(self._attendances()), 1)
+        self.assertFalse(self._attendances().check_out, "Se cerro sin marcaje de salida")
+
+        self._punch(salida_time)
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1)
+        self.assertEqual(attendances.check_out, salida_time)
+        self.assertEqual(attendances.olive_rebuilt_count, 1)
+        self.assertEqual(entrada.state, "applied")
+
+    # ==================================================================
+    # Casos degenerados
+    # ==================================================================
+
+    def test_rafaga_se_colapsa(self):
+        """Dos marcajes a segundos de distancia son uno solo.
+
+        Red de seguridad del servidor por si falla el cooldown del kiosco.
+        """
+        self._punch(self._at(10, 13, 0))
+        self._punch(self._at(10, 13, 0) + timedelta(seconds=20))
+        self._punch(self._at(10, 23))
+        self._fold()
+
+        self.assertEqual(len(self._attendances()), 1)
+        self.assertEqual(
+            len(self._our_punches().filtered(lambda p: p.state == "duplicate")), 1)
+
+    def test_entrada_sobre_entrada(self):
+        """Olvido marcar la salida y al dia siguiente vuelve a entrar.
+
+        La primera se cierra sin solaparse con la segunda y queda marcada como
+        anomalia. Lo que NO puede pasar es que se quede abierta: dos abiertas
+        del mismo empleado son exactamente lo que el core prohibe.
+        """
+        self._punch(self._at(10, 13))
+        self._punch(self._at(11, 13))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 2)
+        self.assertTrue(attendances[0].check_out, "Quedo abierta y va a atorar la cola")
+        self.assertEqual(attendances[0].olive_anomaly, "missing_out")
+        self.assertLessEqual(attendances[0].check_out, attendances[1].check_in)
+
+    def test_salida_huerfana_se_rechaza(self):
+        """No se inventa una entrada: seria fabricar horas que nadie registro."""
+        salida = self._punch(self._at(10, 23), direction="out")
+        self._fold()
+
+        self.assertEqual(len(self._attendances()), 0)
+        self.assertEqual(salida.state, "rejected")
+        self.assertEqual(salida.review_state, "pending")
+
+    def test_turno_cruzando_medianoche(self):
+        """22:00 a 06:00 es UN turno, no dos jornadas partidas.
+
+        Es lo que justifica expandir la ventana +-jornada maxima.
+        """
+        self._punch(self._at(11, 4))     # 10-mar 22:00 local
+        self._punch(self._at(11, 12))    # 11-mar 06:00 local
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1)
+        self.assertEqual(attendances.check_in, self._at(11, 4))
+        self.assertEqual(attendances.check_out, self._at(11, 12))
+
+    def test_cierre_forzado_por_jornada_maxima(self):
+        """Una abierta muy vieja se cierra a la fuerza.
+
+        Es el punto exacto que impide que una asistencia abierta huerfana
+        bloquee para siempre todos los marcajes futuros de esa persona.
+        """
+        hace_mucho = fields.Datetime.now() - timedelta(hours=40)
+        self._punch(hace_mucho)
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1)
+        self.assertTrue(attendances.check_out)
+        self.assertEqual(attendances.olive_anomaly, "forced_close")
+        self.assertEqual(
+            attendances.check_out, attendances.check_in + timedelta(hours=16))
+
+    def test_abierta_reciente_se_respeta(self):
+        """Quien entro hace dos horas sigue adentro: no se cierra nada."""
+        self._punch(fields.Datetime.now() - timedelta(hours=2))
+        self._fold()
+
+        attendances = self._attendances()
+        self.assertEqual(len(attendances), 1)
+        self.assertFalse(attendances.check_out)
+        self.assertFalse(attendances.olive_anomaly)
+
+    # ==================================================================
+    # Lo que el doblado no puede tocar
+    # ==================================================================
+
+    def test_bloque_inmutable_no_se_pisa(self):
+        """Una asistencia registrada a mano gana siempre.
+
+        Es el respaldo del kiosco: cuando no reconoce a alguien, el guardia lo
+        registra a mano. Si el doblado pisara ese registro, el respaldo no
+        serviria de nada.
+        """
+        manual = self.Attendance.sudo().create({
+            "employee_id": self.employee.id,
+            "check_in": self._at(10, 13),
+            "check_out": self._at(10, 23),
+        })
+        self._punch(self._at(10, 14))
+        self._punch(self._at(10, 22))
+        self._fold()
+
+        self.assertTrue(manual.exists(), "Se borro una asistencia manual")
+        self.assertEqual(manual.check_in, self._at(10, 13))
+        self.assertEqual(len(self._attendances()), 1)
+        rechazados = self._our_punches().filtered(lambda p: p.state == "rejected")
+        self.assertEqual(len(rechazados), 2)
+        self.assertEqual(set(rechazados.mapped("review_state")), {"pending"})
+
+    def test_marcaje_sin_empleado_no_se_dobla(self):
+        """Evidencia de identificacion fallida: se conserva, no se aplica."""
+        huerfano = self.Punch.sudo().create({
+            "uuid": uuid.uuid4().hex,
+            "device_id": self.device.id,
+            "device_time": self._at(10, 13),
+            "punch_time": self._at(10, 13),
+            "employee_id": False,
+        })
+        self._fold()
+
+        self.assertEqual(len(self._attendances()), 0)
+        self.assertEqual(huerfano.state, "rejected")
+        self.assertEqual(huerfano.review_state, "pending")
+
+    def test_reloj_no_confiable_no_llega_a_nomina(self):
+        """Si murio la pila del CMOS, esa hora es basura."""
+        malo = self._punch(self._at(10, 13), clock_confidence="unreliable")
+        self._fold()
+
+        self.assertEqual(len(self._attendances()), 0)
+        self.assertEqual(malo.state, "rejected")
+        self.assertEqual(malo.review_state, "pending")
+
+    def test_empleados_distintos_no_se_mezclan(self):
+        """Cada empleado se reconstruye por separado."""
+        otro = self.env["hr.employee"].create({
+            "name": "Otro Empleado", "company_id": self.company.id,
+            "tz": "America/Guatemala",
+        })
+        self._punch(self._at(10, 13))
+        self._punch(self._at(10, 23))
+        self._punch(self._at(10, 14), employee=otro)
+        self._punch(self._at(10, 22), employee=otro)
+        self._fold()
+
+        self.assertEqual(len(self._attendances()), 1)
+        self.assertEqual(len(self._attendances(otro)), 1)
+        self.assertEqual(self._attendances(otro).check_in, self._at(10, 14))
