@@ -17,11 +17,17 @@ import { _t } from "@web/core/l10n/translation";
 const PIPELINE_BASE = "/olive_hr_attendance_face/static/lib/pipeline/pipeline.js";
 const pipelineUrl = (v) => `${PIPELINE_BASE}?v=${encodeURIComponent(v || "0")}`;
 
+// El punto de registro esta ANTES de la zona de obra: la gente marca a cara
+// descubierta y se pone el equipo despues. Por eso no se enrola con casco ni
+// con lentes de seguridad —eso seria enrolar una condicion que nunca se va a
+// dar frente a la camara— y las condiciones que quedan son las que la persona
+// si cambia de un dia para otro.
 const CONDITIONS = [
     _t("Frontal"),
-    _t("Con casco"),
-    _t("Con lentes de seguridad"),
-    _t("Con casco y lentes"),
+    _t("Con lentes graduados"),
+    _t("Sin lentes"),
+    _t("Con gorra o capucha"),
+    _t("Con otra iluminacion"),
 ];
 
 /** Los errores de RPC traen el mensaje util en data.message; `message` es la

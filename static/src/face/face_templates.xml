@@ -172,7 +172,9 @@
                 <h6>Agregar captura con camara</h6>
                 <p class="text-muted small">
                     Vale mas que una foto de archivo: se toma en las condiciones reales.
-                    Hacelo con el casco y los lentes puestos si asi entra a la planta.
+                    El registro va ANTES de ponerse el equipo, asi que se captura a
+                    cara descubierta. Lo unico que conviene repetir es lo que la
+                    persona cambia de un dia a otro: lentes graduados y gorra.
                 </p>
                 <select class="form-select form-select-sm mb-2"
                         t-on-change="(ev) => this.state.condition = ev.target.value">
