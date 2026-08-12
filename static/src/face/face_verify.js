@@ -44,6 +44,7 @@ export class FaceVerify extends Component {
             phase: "loading",
             progress: _t("Iniciando..."),
             error: null,
+            insecure: false,
             employeeName: "",
             consentState: null,
             templates: [],
@@ -72,11 +73,19 @@ export class FaceVerify extends Component {
 
             this.state.progress = _t("Descargando modelos (solo la primera vez)...");
             this.pipeline = await import(PIPELINE_URL);
+            this.state.insecure = !this.pipeline.isSecureContext();
             await this.pipeline.init(this.ctx.profile, () => {});
             this.decoded = this.ctx.templates.map((t) => ({
                 name: t.name, vec: this.pipeline.decodeEmbedding(t.embedding),
             }));
 
+            if (this.state.insecure) {
+                throw new Error(_t(
+                    "Esta pantalla necesita HTTPS. El navegador bloquea la camara en "
+                    + "conexiones no seguras, aunque le des permiso. Procesar fotos si "
+                    + "funciona sin HTTPS; solo la verificacion con camara lo exige."
+                ));
+            }
             this.state.progress = _t("Abriendo la camara...");
             this.stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },

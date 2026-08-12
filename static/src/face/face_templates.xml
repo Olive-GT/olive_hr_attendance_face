@@ -16,6 +16,14 @@
 
         <div t-if="state.phase !== 'loading' and state.phase !== 'error'">
             <h3>Procesar fotos de identificacion</h3>
+
+            <div t-if="state.insecure" class="alert alert-warning">
+                <b>Este Odoo no esta en HTTPS.</b>
+                Procesar fotos funciona igual, pero sin cache: los modelos se vuelven
+                a descargar en cada visita. Y la pantalla de <b>Verificar
+                identificacion</b> no va a poder abrir la camara, porque el navegador
+                la bloquea en conexiones no seguras aunque le des permiso.
+            </div>
             <p class="text-muted">
                 Calcula el vector de cada foto pendiente. Cubre las tres procedencias:
                 la foto de la ficha del empleado, las fotos subidas y las capturas con

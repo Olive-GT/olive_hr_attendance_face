@@ -38,6 +38,7 @@ export class FaceProcess extends Component {
             phase: "loading",       // loading | ready | running | done | error
             progress: _t("Cargando..."),
             error: null,
+            insecure: false,
             rows: [],
             withoutPhoto: [],
             done: 0,
@@ -56,6 +57,7 @@ export class FaceProcess extends Component {
 
             this.state.progress = _t("Descargando modelos (solo la primera vez)...");
             this.pipeline = await import(PIPELINE_URL);
+            this.state.insecure = !this.pipeline.isSecureContext();
             await this.pipeline.init(this.ctx.profile, () => {});
             this.state.phase = "ready";
         } catch (err) {

@@ -40,21 +40,39 @@ function loadOrtScript(url) {
     return loadOrtScript._pending;
 }
 
-/** Descarga un modelo verificando su hash, con Cache API de por medio. */
+/** true si el navegador esta en contexto seguro (HTTPS o localhost). */
+export function isSecureContext() {
+    return typeof window !== "undefined" && window.isSecureContext === true;
+}
+
+/**
+ * Descarga un modelo verificando su hash, con Cache API de por medio.
+ *
+ * La Cache API y crypto.subtle SOLO existen en contexto seguro. Sin HTTPS
+ * ambas son undefined, pero eso no impide procesar fotos: el cache es una
+ * optimizacion y la verificacion de hash una defensa. Se degrada en vez de
+ * fallar, porque procesar fotos no necesita camara y deberia funcionar
+ * mientras se resuelve el certificado.
+ */
 async function fetchModel(url, expectedSha256, onProgress) {
-    const cache = await caches.open("olive-face-models-v1");
-    let resp = await cache.match(url);
+    const cache = typeof caches !== "undefined"
+        ? await caches.open("olive-face-models-v1").catch(() => null)
+        : null;
+
+    let resp = cache ? await cache.match(url) : null;
     if (!resp) {
         onProgress?.({ phase: "download", url });
         resp = await fetch(url);
         if (!resp.ok) {
             throw new Error(`No se pudo descargar ${url}: HTTP ${resp.status}`);
         }
-        await cache.put(url, resp.clone());
+        if (cache) {
+            await cache.put(url, resp.clone());
+        }
     }
     const buf = await resp.arrayBuffer();
 
-    if (expectedSha256 && crypto?.subtle) {
+    if (expectedSha256 && globalThis.crypto?.subtle) {
         // El hash viaja en el bootstrap desde Odoo. Verificarlo aqui es lo que
         // impide que una descarga truncada o alterada quede cacheada para
         // siempre produciendo embeddings basura.
@@ -62,7 +80,7 @@ async function fetchModel(url, expectedSha256, onProgress) {
         const hex = [...new Uint8Array(digest)]
             .map((b) => b.toString(16).padStart(2, "0")).join("");
         if (hex !== expectedSha256) {
-            await cache.delete(url);
+            await cache?.delete(url);
             throw new Error(
                 `El modelo ${url} no coincide con su hash. Descarga corrupta; se borro de la cache.`
             );
