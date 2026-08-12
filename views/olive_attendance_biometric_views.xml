@@ -142,6 +142,11 @@
         <field name="tag">olive_face_process</field>
     </record>
 
+    <record id="action_olive_face_kiosk" model="ir.actions.client">
+        <field name="name">Marcaje por rostro</field>
+        <field name="tag">olive_face_kiosk</field>
+    </record>
+
     <record id="action_olive_face_identify" model="ir.actions.client">
         <field name="name">Probar identificacion</field>
         <field name="tag">olive_face_identify</field>

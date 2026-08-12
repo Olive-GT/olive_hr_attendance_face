@@ -151,7 +151,8 @@ class OliveAttendanceFaceTemplate(models.Model):
                     "o no se detecto un rostro utilizable en ella.",
                     tpl.employee_id.display_name,
                 ))
-            if tpl.employee_id.olive_consent_state != "granted":
+            if (tpl.company_id.olive_face_require_consent
+                    and tpl.employee_id.olive_consent_state != "granted"):
                 raise ValidationError(_(
                     "No se puede activar la foto de %s sin consentimiento "
                     "biometrico registrado.",

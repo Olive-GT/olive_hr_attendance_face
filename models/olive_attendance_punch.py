@@ -14,8 +14,13 @@ primero el hecho crudo, la insercion nunca falla y la reconciliacion se resuelve
 despues, con toda la informacion sobre la mesa.
 """
 
+import logging
+from datetime import timedelta
+
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+
+_logger = logging.getLogger(__name__)
 
 # Lo unico que puede cambiar despues de creado. Todo lo demas son *hechos*:
 # quien marco, cuando, y con que confianza. Reescribir un hecho es falsificar
@@ -210,3 +215,151 @@ class OliveAttendancePunch(models.Model):
         if not hasattr(self, "_fold_pending"):
             raise UserError(_("El doblado todavia no esta implementado (fase F2)."))
         return self._fold_pending(punch_ids=self.ids)
+
+    # ==================================================================
+    # Recepcion desde el acompanante
+    # ==================================================================
+
+    @api.model
+    def olive_kiosk_context(self):
+        """Todo lo que el acompanante necesita para reconocer sin red.
+
+        Baja el indice completo de la compania de una sola vez. Con 100
+        empleados y 3 fotos son ~205 KB: cabe en memoria y evita cualquier
+        consulta al servidor durante el reconocimiento, que es la razon de que
+        siga funcionando cuando se cae el internet.
+        """
+        company = self.env.company
+        profile = company._olive_face_profile()
+        if not profile:
+            raise UserError(_(
+                "No hay un perfil de modelos configurado. Se define en "
+                "Ajustes -> Asistencias -> Reconocimiento Facial."
+            ))
+        device = self.env["olive.attendance.device"].sudo().search(
+            [("company_id", "=", company.id), ("active", "=", True)], limit=1)
+        if not device:
+            device = self.env["olive.attendance.device"].sudo().create({
+                "name": _("Acompanante"), "company_id": company.id, "state": "active",
+            })
+        templates = self.env["olive.attendance.face.template"].sudo().search([
+            ("employee_id.company_id", "=", company.id),
+            ("active", "=", True), ("state", "=", "active"),
+            ("embedding", "!=", False),
+            ("embedding_version", "=", profile.embedding_version),
+        ])
+        return {
+            "pipeline_version": self.env["hr.employee"]._olive_pipeline_version(),
+            "profile": profile._bootstrap_payload(),
+            "settings": company._olive_face_client_settings(),
+            "device_id": device.id,
+            "server_time": fields.Datetime.to_string(fields.Datetime.now()),
+            "embedding_version": profile.embedding_version,
+            "people": [{
+                "employee_id": t.employee_id.id,
+                "name": t.employee_id.display_name,
+                "template_id": t.id,
+                "embedding": t.embedding,
+            } for t in templates],
+        }
+
+    @api.model
+    def olive_receive_punches(self, punches):
+        """Recibe un lote de marcajes del acompanante.
+
+        **Idempotente por UUID**, que es lo que permite al cliente reenviar su
+        cola cuantas veces haga falta sin miedo: si la respuesta se pierde por
+        un corte de red, el reenvio no duplica nada.
+
+        Devuelve la lista de uuid aceptados o ya conocidos, que es la senal para
+        que el cliente los borre de su cola local. Lo que no aparezca ahi se
+        reintenta.
+        """
+        if not punches:
+            return {"accepted": [], "duplicate": [], "rejected": []}
+
+        incoming = {p["uuid"]: p for p in punches if p.get("uuid")}
+        known = set(self.sudo().search([
+            ("uuid", "in", list(incoming))]).mapped("uuid"))
+
+        accepted, rejected = [], []
+        values_list = []
+        for uuid_key, payload in incoming.items():
+            if uuid_key in known:
+                continue
+            try:
+                values_list.append(self._kiosk_values(payload))
+                accepted.append(uuid_key)
+            except Exception as err:  # noqa: BLE001 - un marcaje malo no tumba el lote
+                _logger.warning("Marcaje rechazado (%s): %s", uuid_key, err)
+                rejected.append(uuid_key)
+
+        created = self.sudo().create(values_list) if values_list else self.browse()
+
+        batch = self.env["olive.attendance.sync.batch"].sudo().create({
+            "device_id": created[:1].device_id.id or self.env[
+                "olive.attendance.device"].sudo().search([], limit=1).id,
+            "punch_count": len(incoming),
+            "accepted_count": len(accepted),
+            "duplicate_count": len(known),
+            "rejected_count": len(rejected),
+            "punch_ids": [(6, 0, created.ids)],
+        })
+        created.write({"batch_id": batch.id})
+
+        # Doblado inmediato: con red, el marcaje aparece en las asistencias en
+        # el momento en vez de esperar al cron.
+        if created and self.env.company.olive_face_fold_inline:
+            try:
+                self._fold_pending(punch_ids=created.ids)
+            except Exception:  # noqa: BLE001 - el marcaje ya esta guardado
+                _logger.exception("El doblado en linea fallo; queda para el cron.")
+
+        return {
+            "accepted": accepted,
+            "duplicate": sorted(known),
+            "rejected": rejected,
+        }
+
+    @api.model
+    def _kiosk_values(self, payload):
+        """Traduce un marcaje del cliente a valores del modelo.
+
+        La hora del dispositivo se conserva cruda y ademas se guarda corregida:
+        si el reloj de la laptop esta mal, `device_time` es la evidencia y
+        `punch_time` lo usable.
+        """
+        device_time = fields.Datetime.to_datetime(payload["device_time"])
+        offset = float(payload.get("clock_offset_seconds") or 0.0)
+        punch_time = device_time + timedelta(seconds=offset)
+
+        company = self.env.company
+        drift = abs(offset)
+        if drift > (company.olive_face_reject_clock_drift_seconds or 3600):
+            confidence = "unreliable"
+        elif drift > (company.olive_face_max_clock_drift_seconds or 120):
+            confidence = "drift"
+        else:
+            confidence = "good"
+
+        return {
+            "uuid": payload["uuid"],
+            "device_id": payload["device_id"],
+            "device_time": device_time,
+            "punch_time": punch_time,
+            "clock_offset_seconds": offset,
+            "clock_confidence": confidence,
+            "monotonic_ms": payload.get("monotonic_ms") or 0.0,
+            "boot_id": payload.get("boot_id") or False,
+            "employee_id": payload.get("employee_id") or False,
+            "method": "face",
+            "direction": "auto",
+            "match_score": payload.get("match_score") or 0.0,
+            "margin_score": payload.get("margin_score") or 0.0,
+            "frames_agreed": payload.get("frames_agreed") or 0,
+            "liveness_score": payload.get("liveness_score") or 0.0,
+            "template_id": payload.get("template_id") or False,
+            "runner_up_employee_id": payload.get("runner_up_employee_id") or False,
+            "embedding_version": payload.get("embedding_version") or False,
+            "review_state": "pending" if payload.get("needs_review") else "none",
+        }

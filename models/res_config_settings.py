@@ -63,6 +63,8 @@ class ResConfigSettings(models.TransientModel):
     olive_face_fold_inline = fields.Boolean(
         related="company_id.olive_face_fold_inline", readonly=False)
 
+    olive_face_require_consent = fields.Boolean(
+        related="company_id.olive_face_require_consent", readonly=False)
     olive_face_store_snapshot = fields.Selection(
         related="company_id.olive_face_store_snapshot", readonly=False)
     olive_face_snapshot_retention_days = fields.Integer(

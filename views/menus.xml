@@ -9,6 +9,12 @@
 
     <!-- Operacion diaria. El control de asistencia va primero porque es la
          pantalla que se usa todos los dias y la que alimenta la nomina. -->
+    <menuitem id="menu_olive_face_kiosk"
+              name="Marcaje por rostro"
+              parent="menu_olive_face_root"
+              action="action_olive_face_kiosk"
+              sequence="0"/>
+
     <menuitem id="menu_olive_absence_grid"
               name="Control de asistencia"
               parent="menu_olive_face_root"

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Asistencias por Reconocimiento Facial (Kiosco PWA)",
-    "version": "18.0.6.0.0",
+    "version": "18.0.7.0.0",
     "category": "Human Resources/Attendances",
     "summary": "Kiosco de ingresos y egresos por rostro, con reconocimiento en el navegador y tolerancia a cortes de red y energia",
     "author": "URBOP / OliveGT",
@@ -41,6 +41,10 @@
             "olive_hr_attendance_face/static/src/absence/absence.scss",
             "olive_hr_attendance_face/static/src/report/attendance_summary.js",
             "olive_hr_attendance_face/static/src/report/report_templates.xml",
+            "olive_hr_attendance_face/static/src/kiosk/queue.js",
+            "olive_hr_attendance_face/static/src/kiosk/kiosk.js",
+            "olive_hr_attendance_face/static/src/kiosk/kiosk_templates.xml",
+            "olive_hr_attendance_face/static/src/kiosk/kiosk.scss",
         ],
     },
     "post_init_hook": "post_init_hook",

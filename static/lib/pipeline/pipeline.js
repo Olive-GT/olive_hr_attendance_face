@@ -193,7 +193,104 @@ export async function embed(frameCanvas, face) {
         luminance: meanLuminance(state.aligned),
         crop: state.aligned,
         degenerate: transform.degenerate,
+        // Senales de vida, calculadas del recorte que ya tenemos: no cuestan
+        // ni un modelo mas ni un megabyte mas.
+        sharpness: laplacianVariance(state.aligned),
+        shape: normalizedShape(face.landmarks),
     };
+}
+
+/**
+ * Varianza del laplaciano del recorte alineado: cuanto detalle fino tiene.
+ *
+ * Una cara real a metro y medio de una webcam decente tiene textura —poros,
+ * pelo, bordes de los ojos—. La foto de una cara en la pantalla de un telefono
+ * pasa por dos muestreos y pierde casi todo ese detalle. No es una prueba, pero
+ * es una diferencia medible y gratis.
+ */
+function laplacianVariance(canvas) {
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const gray = new Float32Array(width * height);
+    for (let i = 0; i < gray.length; i++) {
+        const p = i * 4;
+        gray[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+    }
+    let sum = 0;
+    let sumSq = 0;
+    let count = 0;
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            const i = y * width + x;
+            const value = 4 * gray[i] - gray[i - 1] - gray[i + 1]
+                - gray[i - width] - gray[i + width];
+            sum += value;
+            sumSq += value * value;
+            count += 1;
+        }
+    }
+    const mean = sum / count;
+    return sumSq / count - mean * mean;
+}
+
+/**
+ * Los 5 puntos llevados a una escala y orientacion canonicas.
+ *
+ * Quitando posicion, tamano y giro, lo que queda es la GEOMETRIA del rostro. En
+ * una persona real esa geometria fluctua sola entre frames: parpadea, respira,
+ * gira minimamente la cabeza y la perspectiva cambia. Una foto impresa o en una
+ * pantalla es plana y rigida: por mucho que se la mueva, su geometria
+ * normalizada queda casi congelada.
+ *
+ * Comparando esta forma entre varios frames sale una senal de vida sin modelo
+ * de por medio. Es debil —un video en el telefono la enganaria— pero corta el
+ * ataque facil, que es una foto fija.
+ */
+function normalizedShape(landmarks) {
+    const leftEye = [landmarks[0], landmarks[1]];
+    const rightEye = [landmarks[2], landmarks[3]];
+    const dx = rightEye[0] - leftEye[0];
+    const dy = rightEye[1] - leftEye[1];
+    const scale = Math.hypot(dx, dy) || 1;
+    const angle = Math.atan2(dy, dx);
+    const cos = Math.cos(-angle) / scale;
+    const sin = Math.sin(-angle) / scale;
+    const cx = (leftEye[0] + rightEye[0]) / 2;
+    const cy = (leftEye[1] + rightEye[1]) / 2;
+    const out = new Float32Array(10);
+    for (let i = 0; i < 5; i++) {
+        const x = landmarks[2 * i] - cx;
+        const y = landmarks[2 * i + 1] - cy;
+        out[2 * i] = x * cos - y * sin;
+        out[2 * i + 1] = x * sin + y * cos;
+    }
+    return out;
+}
+
+/**
+ * Dispersion de la forma entre varios frames. Cuanto mas alta, mas "viva".
+ *
+ * Se descartan los dos primeros puntos (los ojos), que por construccion quedan
+ * fijos al normalizar: solo informan nariz y comisuras.
+ */
+export function shapeVariation(shapes) {
+    if (!shapes || shapes.length < 2) {
+        return 0;
+    }
+    let total = 0;
+    for (let k = 4; k < 10; k++) {
+        let sum = 0;
+        for (const shape of shapes) {
+            sum += shape[k];
+        }
+        const mean = sum / shapes.length;
+        let variance = 0;
+        for (const shape of shapes) {
+            variance += (shape[k] - mean) ** 2;
+        }
+        total += Math.sqrt(variance / shapes.length);
+    }
+    return total / 6;
 }
 
 /** Devuelve un canvas nuevo con la imagen rotada los grados indicados. */

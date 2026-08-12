@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="olive_hr_attendance_face.FaceKiosk">
+    <div class="o_olive_kiosk d-flex flex-column h-100">
+
+        <div t-if="state.phase === 'loading'"
+             class="d-flex flex-column align-items-center justify-content-center h-100 gap-3 p-4">
+            <div class="spinner-border text-primary"/>
+            <div class="text-center" t-esc="state.progress"/>
+        </div>
+
+        <div t-if="state.phase === 'error'" class="p-3">
+            <div class="alert alert-danger">
+                <h5>No se pudo iniciar</h5>
+                <p class="mb-0" t-esc="state.error"/>
+                <t t-if="state.cameraError">
+                    <hr/>
+                    <p class="mb-0 small">
+                        Sin HTTPS el navegador no permite usar la camara, ni siquiera
+                        con el permiso concedido.
+                    </p>
+                </t>
+            </div>
+        </div>
+
+        <t t-if="state.phase === 'ready'">
+            <!-- Aviso critico: oculta, Chrome congela la pagina y deja de
+                 reconocer. No es un detalle de rendimiento. -->
+            <div t-if="state.hidden and !state.floating"
+                 class="alert alert-danger m-2 p-2 small mb-0">
+                <b>La pagina esta tapada y el reconocimiento se detuvo.</b>
+                Chrome congela lo que no se ve. Usa el boton de ventana flotante
+                para que siga funcionando mientras trabajas.
+            </div>
+
+            <div class="p-2 border-bottom d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge" t-att-class="statusClass" t-esc="statusLabel"/>
+                <span class="text-muted small">
+                    <t t-esc="state.peopleCount"/> personas
+                </span>
+                <button t-if="!state.floating" class="btn btn-sm btn-primary ms-auto"
+                        t-on-click="floatWindow" title="Ventana flotante siempre encima">
+                    <i class="fa fa-external-link me-1"/>Flotar
+                </button>
+            </div>
+
+            <div class="o_olive_kiosk_stage position-relative bg-dark">
+                <video t-ref="video" playsinline="true" muted="true"
+                       class="w-100 d-block"/>
+
+                <!-- El saludo a quien acaba de marcar. Sin esto la persona no
+                     sabe si quedo registrada y va a preguntar cada vez. -->
+                <div t-if="state.greeting"
+                     class="o_olive_greet position-absolute top-0 start-0 w-100 h-100
+                            d-flex flex-column align-items-center justify-content-center">
+                    <div class="display-6">✓</div>
+                    <div class="fs-4 text-center px-2" t-esc="state.greeting.name"/>
+                    <div class="small">Registrado</div>
+                    <div t-if="state.greeting.suspect" class="badge text-bg-warning mt-2">
+                        Queda para revision
+                    </div>
+                </div>
+
+                <div t-if="!state.greeting"
+                     class="position-absolute bottom-0 start-0 w-100 p-2 text-white small">
+                    <span t-if="state.detected">
+                        Confirmando <t t-esc="state.streak"/>/<t t-esc="ctxFrames"/>
+                    </span>
+                    <span t-else="" class="opacity-50">Esperando...</span>
+                </div>
+            </div>
+
+            <div class="p-2 small text-muted mt-auto">
+                <div class="d-flex justify-content-between">
+                    <span>Marcajes de hoy</span>
+                    <b t-esc="state.todayCount"/>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>En cola</span>
+                    <b t-att-class="state.queued ? 'text-warning' : ''"
+                       t-esc="state.queued"/>
+                </div>
+                <div t-if="state.lastSync" class="d-flex justify-content-between">
+                    <span>Ultimo envio</span>
+                    <b t-esc="state.lastSync"/>
+                </div>
+                <div t-if="!state.persisted" class="text-danger mt-1">
+                    El navegador no garantizo el almacenamiento: la cola podria
+                    borrarse si se llena el disco. Instala la pagina como aplicacion.
+                </div>
+            </div>
+        </t>
+    </div>
+</t>
+
+</templates>

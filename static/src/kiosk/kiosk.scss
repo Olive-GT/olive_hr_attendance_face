@@ -1,0 +1,20 @@
+// El acompanante tiene que verse bien a 320 px de ancho, que es el tamano de la
+// ventana flotante. Todo lo demas es secundario.
+
+.o_olive_kiosk {
+    min-width: 260px;
+    background: var(--o-view-background-color, #fff);
+
+    .o_olive_kiosk_stage {
+        line-height: 0;
+    }
+
+    // El saludo tapa el video a proposito: a un metro de distancia lo que la
+    // persona tiene que ver es su nombre, no su propia cara.
+    .o_olive_greet {
+        background: rgba(27, 94, 32, 0.92);
+        color: #fff;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+}

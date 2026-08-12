@@ -164,6 +164,13 @@ class ResCompany(models.Model):
     )
 
     # -- privacidad -------------------------------------------------------
+    olive_face_require_consent = fields.Boolean(
+        default=False, string="Exigir consentimiento biometrico",
+        help="Si se activa, no se puede habilitar la foto de nadie sin un "
+             "consentimiento registrado. El modelo de consentimientos sigue "
+             "existiendo aunque esto este apagado: se puede llevar el registro "
+             "sin que bloquee la operacion.",
+    )
     olive_face_store_snapshot = fields.Selection(
         [("never", "Nunca"), ("review_only", "Solo los que requieren revision"),
          ("always", "Siempre")],

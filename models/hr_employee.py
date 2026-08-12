@@ -47,13 +47,19 @@ class HrEmployee(models.Model):
             employee.olive_consent_id = by_employee.get(employee.id, False)
 
     @api.depends("olive_face_template_count", "olive_consent_state", "active",
-                 "company_id.olive_face_min_templates")
+                 "company_id.olive_face_min_templates",
+                 "company_id.olive_face_require_consent")
     def _compute_olive_face_enabled(self):
         for employee in self:
-            minimum = employee.company_id.olive_face_min_templates or 1
+            company = employee.company_id
+            minimum = company.olive_face_min_templates or 1
+            consent_ok = (
+                not company.olive_face_require_consent
+                or employee.olive_consent_state == "granted"
+            )
             employee.olive_face_enabled = bool(
                 employee.active
-                and employee.olive_consent_state == "granted"
+                and consent_ok
                 and employee.olive_face_template_count >= minimum
             )
 
