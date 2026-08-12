@@ -123,6 +123,22 @@ class ResCompany(models.Model):
         help="Sin purga, las fotos hacen crecer la base sin control.",
     )
 
+    def _olive_face_profile(self):
+        """Perfil de modelos de la compania, con respaldo al perfil semilla.
+
+        El `default` del campo solo alcanza a las companias creadas DESPUES de
+        instalar el modulo. Las que ya existian quedan con el campo vacio, asi
+        que sin este respaldo el modulo falla en toda base preexistente — que
+        son todas las reales.
+        """
+        self.ensure_one()
+        if self.olive_face_model_profile_id:
+            return self.olive_face_model_profile_id
+        return self.env.ref(
+            "olive_hr_attendance_face.model_profile_yunet_sface_v1",
+            raise_if_not_found=False,
+        )
+
     def _olive_face_client_settings(self):
         """Parametros que baja el kiosco. Solo lo que necesita para decidir."""
         self.ensure_one()

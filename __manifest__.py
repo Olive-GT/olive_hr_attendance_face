@@ -33,6 +33,7 @@
             "olive_hr_attendance_face/static/src/face/face.scss",
         ],
     },
+    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
 }

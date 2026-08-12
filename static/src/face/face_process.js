@@ -20,6 +20,12 @@ const PIPELINE_URL = "/olive_hr_attendance_face/static/lib/pipeline/pipeline.js"
 // pensado para alguien a metro y medio de la camara del kiosco, no para una foto.
 const PHOTO_MIN_FACE_PX = 60;
 
+/** Los errores de RPC traen el mensaje util en data.message; `message` es la
+ *  envoltura generica ("Odoo Server Error") y no dice nada. */
+function errorText(err) {
+    return err?.data?.message || err?.message || String(err);
+}
+
 export class FaceProcess extends Component {
     static template = "olive_hr_attendance_face.FaceProcess";
     static props = ["*"];
@@ -54,7 +60,7 @@ export class FaceProcess extends Component {
             this.state.phase = "ready";
         } catch (err) {
             this.state.phase = "error";
-            this.state.error = err.message || String(err);
+            this.state.error = errorText(err);
         }
     }
 
@@ -93,14 +99,14 @@ export class FaceProcess extends Component {
                     }
                     : { state: res.reason, message: this.reasonText(res.reason) };
             } catch (err) {
-                result = { state: "error", message: err.message || String(err) };
+                result = { state: "error", message: errorText(err) };
             }
 
             try {
                 await this.orm.call("olive.attendance.face.template", "olive_store_result",
                                     [row.id, result]);
             } catch (err) {
-                result = { state: "error", message: err.message || String(err) };
+                result = { state: "error", message: errorText(err) };
             }
 
             row.status = result.state;

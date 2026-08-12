@@ -74,9 +74,11 @@ class HrEmployee(models.Model):
                 ("employee_id", "=", employee.id), ("source", "=", "avatar"),
             ], limit=1)
             if existing:
-                # Si el avatar cambio, la foto guardada queda obsoleta.
-                if existing.image != employee.image_1920:
-                    existing.write({"image": employee.image_1920})
+                # No se re-sincroniza: la copia se guarda redimensionada a
+                # 1024 px, asi que jamas es byte a byte igual al avatar, y
+                # compararlas reescribiria la foto en cada pasada dejando el
+                # procesamiento siempre pendiente. Si cambia el avatar, se
+                # borra esta foto y se vuelve a procesar.
                 continue
             created |= Template.create({
                 "employee_id": employee.id,
@@ -114,7 +116,7 @@ class HrEmployee(models.Model):
         """Contexto para la pantalla de verificacion y de captura con camara."""
         self.ensure_one()
         company = self.company_id or self.env.company
-        profile = company.olive_face_model_profile_id
+        profile = company._olive_face_profile()
         if not profile:
             raise UserError(_(
                 "No hay un perfil de modelos configurado. Se define en "
@@ -159,7 +161,7 @@ class HrEmployee(models.Model):
         solo guarda el resultado.
         """
         company = self.env.company
-        profile = company.olive_face_model_profile_id
+        profile = company._olive_face_profile()
         if not profile:
             raise UserError(_(
                 "No hay un perfil de modelos configurado. Se define en "

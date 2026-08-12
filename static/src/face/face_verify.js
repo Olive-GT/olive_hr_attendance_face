@@ -21,6 +21,12 @@ const CONDITIONS = [
     _t("Con casco y lentes"),
 ];
 
+/** Los errores de RPC traen el mensaje util en data.message; `message` es la
+ *  envoltura generica ("Odoo Server Error") y no dice nada. */
+function errorText(err) {
+    return err?.data?.message || err?.message || String(err);
+}
+
 export class FaceVerify extends Component {
     static template = "olive_hr_attendance_face.FaceVerify";
     static props = ["*"];
@@ -84,7 +90,7 @@ export class FaceVerify extends Component {
             this.loop();
         } catch (err) {
             this.state.phase = "error";
-            this.state.error = err.message || String(err);
+            this.state.error = errorText(err);
         }
     }
 
@@ -196,7 +202,7 @@ export class FaceVerify extends Component {
                                       { type: "warning" });
             }
         } catch (err) {
-            this.notification.add(err.message || String(err), { type: "danger" });
+            this.notification.add(errorText(err), { type: "danger" });
         } finally {
             this.state.busy = false;
         }

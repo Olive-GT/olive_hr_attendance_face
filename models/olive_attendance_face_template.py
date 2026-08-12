@@ -157,7 +157,7 @@ class OliveAttendanceFaceTemplate(models.Model):
                     "biometrico registrado.",
                     tpl.employee_id.display_name,
                 ))
-            profile = tpl.company_id.olive_face_model_profile_id
+            profile = tpl.company_id._olive_face_profile()
             if profile and tpl.embedding_version != profile.embedding_version:
                 raise ValidationError(_(
                     "La foto de %(empl)s tiene un vector del espacio '%(tpl)s' pero "
@@ -197,7 +197,7 @@ class OliveAttendanceFaceTemplate(models.Model):
     def olive_store_result(self, result):
         """Guarda el resultado del procesamiento hecho en el navegador."""
         self.ensure_one()
-        profile = self.company_id.olive_face_model_profile_id
+        profile = self.company_id._olive_face_profile()
         vals = {
             "compute_state": result.get("state", "error"),
             "compute_message": result.get("message") or False,
