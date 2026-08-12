@@ -190,7 +190,8 @@ export class FaceVerify extends Component {
             const id = await this.orm.call("hr.employee", "olive_add_camera_photo",
                                            [this.employeeId, b64, this.state.condition]);
 
-            const res = await this.pipeline.process(frame, this.ctx.settings);
+            const res = await this.pipeline.process(frame, this.ctx.settings,
+                                                    { tryRotations: false });
             const result = res.ok
                 ? {
                     state: "ok", embedding: res.base64, dim: res.dim,

@@ -196,15 +196,50 @@ export async function embed(frameCanvas, face) {
     };
 }
 
-/** Pasada completa sobre un frame. Devuelve null en `result` si no hubo rostro usable. */
-export async function process(frameCanvas, settings) {
-    const faces = await detect(frameCanvas, settings);
-    const picked = pickFace(faces, settings);
-    if (!picked.face) {
-        return { ok: false, reason: picked.reason, faces: picked.faces || [], face_px: picked.face_px };
+/** Devuelve un canvas nuevo con la imagen rotada los grados indicados. */
+function rotateCanvas(source, degrees) {
+    const rad = (degrees * Math.PI) / 180;
+    const swap = degrees === 90 || degrees === 270;
+    const out = document.createElement("canvas");
+    out.width = swap ? source.height : source.width;
+    out.height = swap ? source.width : source.height;
+    const ctx = out.getContext("2d", { willReadFrequently: true });
+    ctx.translate(out.width / 2, out.height / 2);
+    ctx.rotate(rad);
+    ctx.drawImage(source, -source.width / 2, -source.height / 2);
+    return out;
+}
+
+/**
+ * Pasada completa sobre un frame.
+ *
+ * Si no encuentra rostro, reintenta rotando la imagen. Las fotos de celular
+ * llegan con la orientacion en los metadatos EXIF, y al redimensionarlas se
+ * pierde ese dato: la imagen queda fisicamente de costado y el detector, que
+ * fue entrenado con caras derechas, no ve nada. Sin este reintento, media
+ * plantilla enrolada desde el telefono fallaria sin explicacion.
+ *
+ * Solo se aplica a imagenes fijas: `tryRotations` va en false para el video del
+ * kiosco, donde la camara nunca cambia de orientacion y probar rotaciones seria
+ * gastar tiempo en cada frame.
+ */
+export async function process(frameCanvas, settings, { tryRotations = true } = {}) {
+    const attempts = tryRotations ? [0, 90, 270, 180] : [0];
+    let first = null;
+
+    for (const degrees of attempts) {
+        const canvas = degrees === 0 ? frameCanvas : rotateCanvas(frameCanvas, degrees);
+        const faces = await detect(canvas, settings);
+        const picked = pickFace(faces, settings);
+        if (!picked.face) {
+            first = first || { ok: false, reason: picked.reason,
+                               faces: picked.faces || [], face_px: picked.face_px };
+            continue;
+        }
+        const result = await embed(canvas, picked.face);
+        return { ok: true, face: picked.face, faces: picked.faces, rotation: degrees, ...result };
     }
-    const result = await embed(frameCanvas, picked.face);
-    return { ok: true, face: picked.face, faces: picked.faces, ...result };
+    return first;
 }
 
 /** Dibuja el frame actual del video en un canvas del tamano nativo. */

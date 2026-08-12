@@ -93,6 +93,9 @@ export class FaceProcess extends Component {
             try {
                 const canvas = await this.loadImage(row.id);
                 const res = await this.pipeline.process(canvas, settings);
+                if (res.ok && res.rotation) {
+                    row.message = _t("Se corrigio la orientacion (%s grados)", res.rotation);
+                }
                 result = res.ok
                     ? {
                         state: "ok",
@@ -115,7 +118,7 @@ export class FaceProcess extends Component {
             }
 
             row.status = result.state;
-            row.message = result.message || "";
+            row.message = result.message || row.message || "";
             this.state.summary[result.state] = (this.state.summary[result.state] || 0) + 1;
             this.state.done += 1;
             await new Promise((r) => setTimeout(r, 0));   // deja avanzar la barra
