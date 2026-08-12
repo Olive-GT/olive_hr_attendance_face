@@ -236,12 +236,20 @@ class OliveAttendancePunch(models.Model):
                 "No hay un perfil de modelos configurado. Se define en "
                 "Ajustes -> Asistencias -> Reconocimiento Facial."
             ))
-        device = self.env["olive.attendance.device"].sudo().search(
-            [("company_id", "=", company.id), ("active", "=", True)], limit=1)
+        Device = self.env["olive.attendance.device"].sudo()
+        device = Device.search([
+            ("company_id", "=", company.id),
+            ("active", "=", True),
+            ("state", "!=", "blocked"),
+        ], limit=1)
         if not device:
-            device = self.env["olive.attendance.device"].sudo().create({
-                "name": _("Acompanante"), "company_id": company.id, "state": "active",
+            device = Device.create({
+                "name": _("Acompanante"), "company_id": company.id,
             })
+        # Usarlo es enlazarlo: el estado sigue al hecho en vez de pedir un paso
+        # manual que nadie sabria que tiene que dar.
+        if device.state == "draft":
+            device.state = "linked"
         templates = self.env["olive.attendance.face.template"].sudo().search([
             ("employee_id.company_id", "=", company.id),
             ("active", "=", True), ("state", "=", "active"),
