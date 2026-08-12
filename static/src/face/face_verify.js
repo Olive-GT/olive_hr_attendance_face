@@ -82,18 +82,19 @@ export class FaceVerify extends Component {
                 name: t.name, vec: this.pipeline.decodeEmbedding(t.embedding),
             }));
 
-            if (this.state.insecure) {
-                throw new Error(_t(
-                    "Esta pantalla necesita HTTPS. El navegador bloquea la camara en "
-                    + "conexiones no seguras, aunque le des permiso. Procesar fotos si "
-                    + "funciona sin HTTPS; solo la verificacion con camara lo exige."
-                ));
-            }
+            // No se bloquea por adelantado segun isSecureContext: la autoridad es
+            // el navegador, no una suposicion nuestra. Hay configuraciones validas
+            // —localhost, o una bandera de Chrome para pruebas— donde la camara
+            // funciona igual, y un chequeo previo las rechazaria sin motivo.
             this.state.progress = _t("Abriendo la camara...");
-            this.stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
-                audio: false,
-            });
+            try {
+                this.stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+                    audio: false,
+                });
+            } catch (camErr) {
+                throw new Error(this.cameraErrorText(camErr));
+            }
             this.videoRef.el.srcObject = this.stream;
             await this.videoRef.el.play();
 
@@ -104,6 +105,29 @@ export class FaceVerify extends Component {
             this.state.phase = "error";
             this.state.error = errorText(err);
         }
+    }
+
+    /** Traduce el fallo de la camara a algo accionable. */
+    cameraErrorText(err) {
+        const name = err?.name || "";
+        if (name === "NotAllowedError") {
+            return _t("Le negaste el permiso a la camara. Habilitalo en el candado de "
+                      + "la barra de direcciones y recarga la pagina.");
+        }
+        if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+            return _t("No se encontro ninguna camara conectada a este equipo.");
+        }
+        if (name === "NotReadableError") {
+            return _t("La camara existe pero otra aplicacion la esta usando. "
+                      + "Cerra Zoom, Meet o Teams y volve a intentar.");
+        }
+        if (!navigator.mediaDevices || this.state.insecure) {
+            return _t("El navegador bloqueo la camara porque la conexion no es segura "
+                      + "(no es HTTPS ni localhost). Comprobalo escribiendo "
+                      + "window.isSecureContext en la consola: tiene que decir true. "
+                      + "Procesar fotos si funciona sin HTTPS; solo esta pantalla lo exige.");
+        }
+        return err?.message || String(err);
     }
 
     stop() {
