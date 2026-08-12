@@ -70,25 +70,26 @@ class OliveAttendanceAbsence(models.Model):
 
     state = fields.Selection(
         [
-            ("candidate", "Detectada"),
-            ("confirmed", "Confirmada"),
-            ("justified", "Justificada"),
-            ("dismissed", "Descartada"),
+            ("proposed", "Propuesta por el sistema"),
+            ("confirmed", "Ausencia confirmada"),
+            ("rejected", "No era ausencia"),
         ],
-        default="candidate", required=True, index=True, tracking=True,
-        help="Solo 'Confirmada' llega a la nomina. 'Justificada' significa que "
-             "falto pero no se descuenta.",
+        default="proposed", required=True, index=True, tracking=True,
+        help="Solo 'confirmada' llega a la nomina, y solo la pone una persona.\n\n"
+             "'No era ausencia' no es un estado con significado propio: equivale "
+             "a no tener registro, y solo existe para que el barrido no vuelva a "
+             "insistir con el mismo dia.",
     )
     reason = fields.Selection(
         [
             ("unjustified", "Falta injustificada"),
             ("rest_day", "Era su dia de descanso"),
-            ("holiday", "Feriado o asueto"),
-            ("leave", "Permiso o vacaciones"),
             ("kiosk_failure", "Vino pero el kiosco no lo registro"),
             ("other", "Otro"),
         ],
         tracking=True,
+        help="Vacaciones y permisos NO van aqui: se registran en Ausencias de "
+             "Odoo (hr.leave), que es donde ya viven.",
     )
     note = fields.Text(string="Nota")
 
@@ -180,13 +181,13 @@ class OliveAttendanceAbsence(models.Model):
                     # Llego un marcaje tardio y ahora si consta que vino: la
                     # candidata deja de tener sentido. Solo se retira si nadie
                     # la habia revisado.
-                    if record and record.state == "candidate":
+                    if record and record.state == "proposed":
                         record.unlink()
                         removed += 1
                     continue
 
                 if (employee.id, day) in excused:
-                    if record and record.state == "candidate":
+                    if record and record.state == "proposed":
                         record.unlink()
                         removed += 1
                     continue
@@ -196,7 +197,7 @@ class OliveAttendanceAbsence(models.Model):
                 if evaluation["confidence"] < threshold:
                     # No se propone nada. Igual aparece en la cuadricula como
                     # "no vino", pero sin acusar a nadie.
-                    if record and record.state == "candidate":
+                    if record and record.state == "proposed":
                         record.unlink()
                         removed += 1
                     continue
@@ -211,7 +212,9 @@ class OliveAttendanceAbsence(models.Model):
                     "worked_after": evaluation["worked_after"],
                 }
                 if record:
-                    if record.state == "candidate":
+                    # Un dia que ya reviso una persona no se vuelve a tocar,
+                    # aunque el barrido cambie de opinion.
+                    if record.state == "proposed":
                         record.write(values)
                 else:
                     self.sudo().create(dict(
@@ -412,16 +415,34 @@ class OliveAttendanceAbsence(models.Model):
         """Confirmada = se descuenta. Es la unica accion que cuesta dinero."""
         return self._mark("confirmed", "unjustified")
 
-    def action_justify(self):
-        return self._mark("justified")
-
-    def action_dismiss(self):
-        return self._mark("dismissed")
+    def action_reject(self):
+        """No era ausencia. El dia vuelve a ser un dia cualquiera."""
+        return self._mark("rejected")
 
     def action_reopen(self):
         return self.write({
-            "state": "candidate", "reviewed_by_uid": False, "reviewed_date": False,
+            "state": "proposed", "reviewed_by_uid": False, "reviewed_date": False,
         })
+
+    def action_open_leave(self):
+        """Abre el registro de ausencias de Odoo para vacaciones o permisos.
+
+        No se duplica: las vacaciones y los permisos ya son hr.leave y ahi se
+        quedan. Desde aqui solo se salta a la pantalla que corresponde.
+        """
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "hr.leave",
+            "view_mode": "form",
+            "target": "new",
+            "name": _("Permiso o vacaciones"),
+            "context": {
+                "default_employee_id": self.employee_id.id,
+                "default_request_date_from": self.absence_date,
+                "default_request_date_to": self.absence_date,
+            },
+        }
 
     # ==================================================================
     # El unico punto de contacto con la nomina
@@ -470,7 +491,7 @@ class OliveAttendanceAbsence(models.Model):
             ("company_id", "=", company_id or self.env.company.id),
             ("absence_date", ">=", date_from),
             ("absence_date", "<=", date_to),
-            ("state", "=", "candidate"),
+            ("state", "=", "proposed"),
         ])
 
     # ==================================================================
@@ -582,11 +603,11 @@ class OliveAttendanceAbsence(models.Model):
                     status = "future"
                 elif (employee.id, day) in excused:
                     status = "excused"
-                elif record:
+                elif record and record.state != "rejected":
                     status = record.state
                     if record.state == "confirmed":
                         confirmed += 1
-                    elif record.state == "candidate":
+                    elif record.state == "proposed":
                         pending += 1
                 else:
                     # No vino, pero el sistema no tiene motivos para acusarlo.
@@ -637,7 +658,7 @@ class OliveAttendanceAbsence(models.Model):
                 "employee_id": employee_id, "absence_date": day,
                 "signals": _("Registrada a mano por un supervisor."),
             })
-        if state == "candidate":
+        if state == "proposed":
             record.action_reopen()
         else:
             record._mark(state, reason)

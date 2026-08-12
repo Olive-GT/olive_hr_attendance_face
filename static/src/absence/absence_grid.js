@@ -18,11 +18,11 @@ import { _t } from "@web/core/l10n/translation";
 const STATUS = {
     worked: { cls: "o_olive_worked", label: "Vino", icon: "✓" },
     confirmed: { cls: "o_olive_confirmed", label: "Ausencia confirmada", icon: "✕" },
-    candidate: { cls: "o_olive_candidate", label: "Posible ausencia", icon: "!" },
-    justified: { cls: "o_olive_justified", label: "Ausencia justificada", icon: "J" },
-    dismissed: { cls: "o_olive_dismissed", label: "Descartada", icon: "·" },
+    proposed: { cls: "o_olive_candidate", label: "Posible ausencia", icon: "!" },
     excused: { cls: "o_olive_excused", label: "Permiso o vacaciones", icon: "P" },
-    quiet: { cls: "o_olive_quiet", label: "No vino", icon: "·" },
+    // Ni asistencia ni ausencia = descanso. No es un vacio de informacion: es
+    // la respuesta, y por eso no lleva color ni pide nada.
+    quiet: { cls: "o_olive_quiet", label: "Descanso (sin marcar)", icon: "·" },
     future: { cls: "o_olive_future", label: "", icon: "" },
 };
 
@@ -39,7 +39,7 @@ export class AbsenceGrid extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
-        this.dialog = useService("dialog");
+        this.action = useService("action");
 
         this.state = useState({
             phase: "loading",
@@ -113,6 +113,28 @@ export class AbsenceGrid extends Component {
 
     close() {
         this.state.selected = null;
+    }
+
+    /** Vacaciones y permisos viven en Ausencias de Odoo, no aqui. */
+    async openLeave() {
+        const { row, cell } = this.state.selected || {};
+        if (!row) {
+            return;
+        }
+        this.state.selected = null;
+        await this.action.doAction({
+            type: "ir.actions.act_window",
+            res_model: "hr.leave",
+            view_mode: "form",
+            views: [[false, "form"]],
+            target: "new",
+            name: _t("Permiso o vacaciones"),
+            context: {
+                default_employee_id: row.employee_id,
+                default_request_date_from: cell.date,
+                default_request_date_to: cell.date,
+            },
+        });
     }
 
     async setState(newState, reason = null) {

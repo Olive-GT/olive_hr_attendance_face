@@ -85,7 +85,7 @@ class TestAbsence(TransactionCase):
         absence = self._absences().filtered(
             lambda a: a.absence_date == self._day(4))
         self.assertEqual(len(absence), 1, "No detecto una ausencia evidente")
-        self.assertEqual(absence.state, "candidate", "Nunca debe auto-confirmar")
+        self.assertEqual(absence.state, "proposed", "Nunca debe auto-confirmar")
         self.assertGreater(absence.confidence, 0.8)
         self.assertTrue(absence.signals, "Toda propuesta debe venir explicada")
 
@@ -131,7 +131,7 @@ class TestAbsence(TransactionCase):
 
         self._scan()
 
-        propuestas = self._absences(rest).filtered(lambda a: a.state == "candidate")
+        propuestas = self._absences(rest).filtered(lambda a: a.state == "proposed")
         self.assertFalse(
             propuestas,
             "Una rotacion 3x3 se propuso como ausencias: %s" % (
@@ -163,7 +163,7 @@ class TestAbsence(TransactionCase):
         self._crew_worked(self._day(5), exclude=self.target)
         self._scan()
 
-        detectadas = self._absences().filtered(lambda a: a.state == "candidate")
+        detectadas = self._absences().filtered(lambda a: a.state == "proposed")
         self.assertTrue(detectadas, "Hacia falta al menos una detectada")
 
         datos = self.Absence.olive_confirmed_absences(
@@ -180,11 +180,12 @@ class TestAbsence(TransactionCase):
         self.assertEqual(datos["days"], 1)
         self.assertEqual(len(datos["dates"]), 1)
 
-    def test_justificada_no_se_descuenta(self):
+    def test_rechazada_no_se_descuenta(self):
+        """Un dia marcado como "no era ausencia" vuelve a ser un dia cualquiera."""
         self._crew_worked(self._day(5), exclude=self.target)
         self._scan()
-        detectadas = self._absences().filtered(lambda a: a.state == "candidate")
-        detectadas[0].action_justify()
+        detectadas = self._absences().filtered(lambda a: a.state == "proposed")
+        detectadas[0].action_reject()
 
         datos = self.Absence.olive_confirmed_absences(
             self.target.id, self._day(10), self._day(1))
@@ -198,7 +199,7 @@ class TestAbsence(TransactionCase):
         """
         self._crew_worked(self._day(5), exclude=self.target)
         self._scan()
-        self.assertTrue(self._absences().filtered(lambda a: a.state == "candidate"))
+        self.assertTrue(self._absences().filtered(lambda a: a.state == "proposed"))
 
         # Ahora si llega la constancia de que vino.
         self._worked(self.target, self._day(5))
@@ -213,7 +214,7 @@ class TestAbsence(TransactionCase):
         """Una decision tomada por una persona no se borra sola."""
         self._crew_worked(self._day(5), exclude=self.target)
         self._scan()
-        absence = self._absences().filtered(lambda a: a.state == "candidate")[0]
+        absence = self._absences().filtered(lambda a: a.state == "proposed")[0]
         absence.action_confirm()
 
         self._scan()

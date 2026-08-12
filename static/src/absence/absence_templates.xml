@@ -41,10 +41,11 @@
             </div>
 
             <div class="alert alert-info py-2 small mb-2">
-                <b>Nada aqui descuenta dinero por si solo.</b>
-                El sistema solo senala lo que le parece raro y explica por que.
-                Unicamente lo que marques como <b>Ausencia confirmada</b> llega a
-                la nomina. Hace clic en cualquier dia para revisarlo.
+                <b>Un dia sin marcar es descanso.</b>
+                El sistema solo <b>propone</b> ausencias cuando ve algo que se le
+                parece, y explica por que. Solo lo que marques como
+                <b>Ausencia confirmada</b> llega a la nomina; todo lo demas no
+                cuesta nada. Hace clic en cualquier dia para revisarlo.
             </div>
 
             <div class="flex-grow-1 overflow-auto">
@@ -90,9 +91,8 @@
                 <span><span class="o_olive_key o_olive_worked"/> vino</span>
                 <span><span class="o_olive_key o_olive_candidate"/> posible ausencia</span>
                 <span><span class="o_olive_key o_olive_confirmed"/> confirmada</span>
-                <span><span class="o_olive_key o_olive_justified"/> justificada</span>
-                <span><span class="o_olive_key o_olive_excused"/> permiso</span>
-                <span><span class="o_olive_key o_olive_quiet"/> no vino, sin sospecha</span>
+                <span><span class="o_olive_key o_olive_excused"/> permiso o vacaciones</span>
+                <span><span class="o_olive_key o_olive_quiet"/> descanso</span>
             </div>
 
             <!-- Panel de revision de un dia -->
@@ -110,8 +110,9 @@
                     <pre class="small mb-0 mt-1" t-esc="state.selected.cell.signals"/>
                 </div>
                 <div t-else="" class="text-muted small mt-2">
-                    El sistema no propuso nada para este dia. Podes registrarlo
-                    igual si sabes que la persona falto.
+                    El sistema no propuso nada para este dia, asi que cuenta como
+                    descanso. Podes marcarlo como ausencia igual si sabes que la
+                    persona tenia que venir y no vino.
                 </div>
 
                 <div class="d-flex gap-2 flex-wrap mt-3">
@@ -119,21 +120,21 @@
                             t-on-click="() => this.setState('confirmed', 'unjustified')">
                         Confirmar ausencia (se descuenta)
                     </button>
-                    <button class="btn btn-warning btn-sm" t-att-disabled="state.busy"
-                            t-on-click="() => this.setState('justified')">
-                        Justificada (no se descuenta)
-                    </button>
                     <button class="btn btn-secondary btn-sm" t-att-disabled="state.busy"
-                            t-on-click="() => this.setState('dismissed', 'rest_day')">
+                            t-on-click="() => this.setState('rejected', 'rest_day')">
                         Era su dia de descanso
                     </button>
                     <button class="btn btn-secondary btn-sm" t-att-disabled="state.busy"
-                            t-on-click="() => this.setState('dismissed', 'kiosk_failure')">
+                            t-on-click="() => this.setState('rejected', 'kiosk_failure')">
                         Si vino, fallo el kiosco
+                    </button>
+                    <button class="btn btn-info btn-sm" t-att-disabled="state.busy"
+                            t-on-click="openLeave">
+                        Fue permiso o vacaciones
                     </button>
                     <button t-if="state.selected.cell.absence_id"
                             class="btn btn-light btn-sm" t-att-disabled="state.busy"
-                            t-on-click="() => this.setState('candidate')">
+                            t-on-click="() => this.setState('proposed')">
                         Volver a dejarla sin revisar
                     </button>
                 </div>

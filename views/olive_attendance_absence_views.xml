@@ -6,8 +6,8 @@
         <field name="model">olive.attendance.absence</field>
         <field name="arch" type="xml">
             <list decoration-danger="state == 'confirmed'"
-                  decoration-warning="state == 'candidate'"
-                  decoration-muted="state == 'dismissed'">
+                  decoration-warning="state == 'proposed'"
+                  decoration-muted="state == 'rejected'">
                 <field name="absence_date"/>
                 <field name="employee_id"/>
                 <field name="department_id" optional="show"/>
@@ -21,10 +21,8 @@
                 <button name="action_confirm" type="object" string="Confirmar"
                         icon="fa-times-circle" invisible="state == 'confirmed'"
                         confirm="Confirmar la ausencia significa que ese dia se puede descontar de la nomina. ¿Seguro?"/>
-                <button name="action_justify" type="object" string="Justificar"
-                        icon="fa-check" invisible="state == 'justified'"/>
-                <button name="action_dismiss" type="object" string="Descartar"
-                        icon="fa-ban" invisible="state == 'dismissed'"/>
+                <button name="action_reject" type="object" string="No era ausencia"
+                        icon="fa-ban" invisible="state == 'rejected'"/>
             </list>
         </field>
     </record>
@@ -38,22 +36,28 @@
                     <button name="action_confirm" type="object" class="btn-danger"
                             string="Confirmar ausencia" invisible="state == 'confirmed'"
                             confirm="Confirmar la ausencia significa que ese dia se puede descontar de la nomina. ¿Seguro?"/>
-                    <button name="action_justify" type="object"
-                            string="Justificar" invisible="state == 'justified'"/>
-                    <button name="action_dismiss" type="object"
-                            string="Descartar" invisible="state == 'dismissed'"/>
+                    <button name="action_reject" type="object"
+                            string="No era ausencia" invisible="state == 'rejected'"/>
+                    <button name="action_open_leave" type="object"
+                            string="Registrar permiso o vacaciones"/>
                     <button name="action_reopen" type="object"
-                            string="Dejar sin revisar" invisible="state == 'candidate'"/>
+                            string="Dejar sin revisar" invisible="state == 'proposed'"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
                     <div class="alert alert-warning" role="alert"
                          invisible="state != 'confirmed'">
                         <b>Este dia se puede descontar de la nomina.</b>
-                        Es la unica accion del modulo que cuesta dinero. Si hay
-                        cualquier duda de que la persona si trabajo, mejor
-                        justificarla: no pagarle a alguien que trabajo es una falla
-                        mucho mas grave que pagarle un dia de mas.
+                        Es la unica accion del modulo que cuesta dinero. Ante
+                        cualquier duda de que la persona si trabajo, marcala como
+                        <b>No era ausencia</b>: no pagarle a alguien que trabajo es
+                        una falla mucho mas grave que pagarle un dia de mas.
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="state == 'confirmed'">
+                        Si el dia no esta marcado como asistencia ni como ausencia,
+                        <b>es descanso</b> y no pasa nada. Y si fue permiso o
+                        vacaciones, se registra en <b>Ausencias</b> de Odoo, no aqui.
                     </div>
                     <group>
                         <group>
@@ -98,8 +102,8 @@
             <search>
                 <field name="employee_id"/>
                 <field name="department_id"/>
-                <filter name="f_candidate" string="Por revisar"
-                        domain="[('state', '=', 'candidate')]"/>
+                <filter name="f_proposed" string="Por revisar"
+                        domain="[('state', '=', 'proposed')]"/>
                 <filter name="f_confirmed" string="Confirmadas"
                         domain="[('state', '=', 'confirmed')]"/>
                 <separator/>
@@ -126,12 +130,14 @@
         <field name="name">Ausencias</field>
         <field name="res_model">olive.attendance.absence</field>
         <field name="view_mode">list,form</field>
-        <field name="context">{'search_default_f_candidate': 1}</field>
+        <field name="context">{'search_default_f_proposed': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No hay ausencias registradas</p>
-            <p>El sistema propone ausencias comparando a cada persona con sus
-               companeros y con su propio ritmo. Nunca descuenta solo: hasta que
-               alguien confirme, ninguna llega a la nomina.</p>
+            <p>El sistema solo <b>propone</b> ausencias, comparando a cada persona
+               con sus companeros y con su propio ritmo. Quien decide es el
+               administrador.</p>
+            <p>Un dia que no esta marcado ni como asistencia ni como ausencia es
+               simplemente descanso. Nada que hacer.</p>
         </field>
     </record>
 
