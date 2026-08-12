@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_olive_attendance_device_list" model="ir.ui.view">
+        <field name="name">olive.attendance.device.list</field>
+        <field name="model">olive.attendance.device</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'draft'" decoration-danger="state == 'blocked'">
+                <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="state"/>
+                <field name="last_seen"/>
+                <field name="queued_punch_count"/>
+                <field name="last_selftest_result"/>
+                <field name="benchmark_ms" optional="hide"/>
+                <field name="app_version" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_device_form" model="ir.ui.view">
+        <field name="name">olive.attendance.device.form</field>
+        <field name="model">olive.attendance.device</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_force_full_resync" type="object" string="Forzar resincronizacion"
+                            help="El kiosco descarta su copia local y baja todo de nuevo."/>
+                    <button name="action_regenerate_token" type="object" string="Regenerar token"
+                            confirm="Esto invalida la URL actual y el kiosco quedara desconectado hasta reenlazarlo. ¿Continuar?"
+                            groups="olive_hr_attendance_face.group_face_manager"/>
+                    <button name="action_block" type="object" string="Bloquear"
+                            invisible="state == 'blocked'"
+                            groups="olive_hr_attendance_face.group_face_manager"/>
+                    <button name="action_unblock" type="object" string="Desbloquear"
+                            invisible="state != 'blocked'"
+                            groups="olive_hr_attendance_face.group_face_manager"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,linked"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="Kiosco Caseta"/></h1>
+                    </div>
+                    <group>
+                        <group string="Configuracion">
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="model_profile_id"/>
+                            <field name="sync_epoch" readonly="1"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group string="Enlace">
+                            <field name="kiosk_url" widget="url" readonly="1"
+                                   groups="olive_hr_attendance_face.group_face_manager"/>
+                            <field name="token" password="True"
+                                   groups="olive_hr_attendance_face.group_face_manager"/>
+                            <field name="secret_key" password="True"
+                                   groups="olive_hr_attendance_face.group_face_manager"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Estado">
+                            <field name="last_seen"/>
+                            <field name="last_sync_down"/>
+                            <field name="last_sync_up"/>
+                            <field name="queued_punch_count"/>
+                            <field name="last_clock_offset_seconds"/>
+                        </group>
+                        <group string="Autodiagnostico">
+                            <field name="last_selftest_date"/>
+                            <field name="last_selftest_result"/>
+                            <field name="benchmark_ms"/>
+                            <field name="app_version"/>
+                            <field name="last_ip"/>
+                        </group>
+                    </group>
+                    <field name="last_selftest_detail" readonly="1"
+                           invisible="not last_selftest_detail"/>
+                    <field name="user_agent" readonly="1" invisible="not user_agent"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_olive_attendance_device" model="ir.actions.act_window">
+        <field name="name">Kioscos</field>
+        <field name="res_model">olive.attendance.device</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registra tu primer kiosco</p>
+            <p>Cada kiosco obtiene una URL propia con token. Se abre esa direccion
+               en Chrome desde el equipo de la caseta y queda enlazado.</p>
+        </field>
+    </record>
+
+</odoo>

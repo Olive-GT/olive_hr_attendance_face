@@ -1,0 +1,22 @@
+.o_olive_face {
+    .o_olive_stage {
+        max-width: 900px;
+
+        video {
+            max-height: 60vh;
+            object-fit: contain;
+        }
+
+        // El overlay se estira exactamente sobre el video: las coordenadas del
+        // canvas estan en pixeles del frame, no de la pantalla, y el escalado lo
+        // resuelve el CSS.
+        canvas {
+            pointer-events: none;
+        }
+    }
+
+    .o_olive_side {
+        width: 340px;
+        min-width: 340px;
+    }
+}

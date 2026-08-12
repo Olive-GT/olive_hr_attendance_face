@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_hr_employee_form_olive_face" model="ir.ui.view">
+        <field name="name">hr.employee.form.olive.face</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_olive_face_photos" type="object"
+                        class="oe_stat_button" icon="fa-picture-o"
+                        groups="olive_hr_attendance_face.group_face_user">
+                    <div class="o_stat_info">
+                        <field name="olive_face_template_count" class="o_stat_value"/>
+                        <span class="o_stat_text">Fotos de rostro</span>
+                    </div>
+                </button>
+                <button name="action_olive_verify_face" type="object"
+                        class="oe_stat_button" icon="fa-check-circle"
+                        groups="olive_hr_attendance_face.group_face_user">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Verificar</span>
+                        <span class="o_stat_text">identificacion</span>
+                    </div>
+                </button>
+            </xpath>
+            <xpath expr="//page[@name='hr_settings']" position="inside">
+                <group string="Asistencia facial" name="olive_face"
+                       groups="olive_hr_attendance_face.group_face_user">
+                    <field name="olive_consent_state"/>
+                    <field name="olive_face_template_count"/>
+                    <field name="olive_face_enabled"/>
+                    <button name="action_olive_open_consent" type="object" string="Registrar consentimiento"
+                            class="btn-link" colspan="2"/>
+                    <div class="text-muted" colspan="2">
+                        La foto de la ficha se usa automaticamente. Para que rinda mas,
+                        agrega capturas con la camara en las condiciones reales del
+                        kiosco: con el casco y los lentes puestos, y con su misma luz.
+                        Capturar en otras condiciones es la causa mas comun de que
+                        despues no reconozca en la caseta.
+                    </div>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_hr_attendance_list_olive_face" model="ir.ui.view">
+        <field name="name">hr.attendance.list.olive.face</field>
+        <field name="model">hr.attendance</field>
+        <field name="inherit_id" ref="hr_attendance.view_attendance_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='employee_id']" position="after">
+                <field name="olive_is_managed" optional="hide" string="Del kiosco"/>
+                <field name="olive_anomaly" optional="show"/>
+                <field name="olive_rebuilt_count" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

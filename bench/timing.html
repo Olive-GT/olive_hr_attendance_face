@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>F0 · Medicion por reloj de pared</title></head>
+<body>
+<!--
+  En Chrome headless con --virtual-time-budget, performance.now() devuelve
+  tiempo virtual: todas las mediciones internas colapsan a 0 ms. El trabajo de
+  CPU si es real, asi que el coste se mide cronometrando el proceso completo
+  desde afuera y restando una corrida de calibracion con n=0.
+
+    ?n=<iteraciones>&size=<px>&model=<archivo>&emb=<archivo>&stage=<det|emb|full>
+-->
+<pre id="result">corriendo...</pre>
+<script src="./vendor/ort.wasm.min.js"></script>
+<script type="module">
+import { configureOrt, createSession } from "./lib/ort-loader.js";
+import * as yunet from "./lib/yunet.js";
+import * as align from "./lib/align.js";
+import * as sface from "./lib/sface.js";
+
+const q = new URLSearchParams(location.search);
+const N = parseInt(q.get("n") || "0", 10);
+const SIZE = parseInt(q.get("size") || "320", 10);
+const MODEL = q.get("model") || "yunet_2026may.onnx";
+const EMB = q.get("emb") || "sface_int8.onnx";
+const STAGE = q.get("stage") || "full";
+
+const say = (m) => { document.getElementById("result").textContent = m; };
+
+function frame(w, h) {
+    const c = Object.assign(document.createElement("canvas"), { width: w, height: h });
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, "#333"); g.addColorStop(1, "#d8c0a8");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#c9a084";
+    ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 7, h / 5, 0, 0, 6.283); ctx.fill();
+    return c;
+}
+
+try {
+    const ort = configureOrt(window.ort, "./vendor/");
+    const det = STAGE === "emb" ? null : await createSession(ort, `./vendor/${MODEL}`);
+    const emb = STAGE === "det" ? null : await createSession(ort, `./vendor/${EMB}`);
+
+    const src = frame(640, 480);
+    const scratch = document.createElement("canvas");
+    const alignCanvas = Object.assign(document.createElement("canvas"), { width: 112, height: 112 });
+    // Puntos fijos y plausibles: la alineacion y el embedding deben correr
+    // siempre, aunque el lienzo sintetico no tenga una cara real.
+    const lm = new Float32Array([250, 210, 330, 210, 290, 260, 258, 305, 322, 305]);
+
+    let sink = 0;
+    for (let i = 0; i < N; i++) {
+        if (det) {
+            const t = yunet.preprocess(ort, src, SIZE, SIZE, scratch);
+            const o = await det.run({ input: t });
+            sink += yunet.nms(yunet.decode(o, SIZE, SIZE, 0.6), 0.3, 5).length;
+        }
+        if (emb) {
+            align.alignTo112(src, lm, alignCanvas);
+            const et = sface.preprocess(ort, alignCanvas);
+            const r = await emb.run({ data: et });
+            sink += sface.l2normalize(r[emb.outputNames[0]].data)[0];
+        }
+    }
+    if (sink > 1e9) { console.log("nunca"); }  // evita que se elimine por optimizacion
+    say(`TIMING-DONE n=${N} size=${SIZE} model=${MODEL} emb=${EMB} stage=${STAGE}`);
+} catch (e) {
+    say(`TIMING-ERROR ${e && e.message}`);
+}
+</script>
+</body>
+</html>

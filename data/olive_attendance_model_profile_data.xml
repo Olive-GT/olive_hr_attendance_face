@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Perfil semilla. Los modelos y sus versiones fueron elegidos por medicion
+        en F0, no por catalogo (ver bench/RESULTADOS.md):
+
+          * YuNet 2026may y no 2023mar: el export 2023mar tiene entrada FIJA de
+            640x640 y obliga a pagar siempre la deteccion mas cara.
+          * SFace fp32 y no int8: contraintuitivo pero medido, el int8 resulta
+            MAS LENTO en ORT WASM (110 ms contra 89 ms) porque no hay kernels
+            int8 optimizados. Pesa 38.7 MB en vez de 9.9, pero eso se descarga
+            una sola vez y queda en Cache API; la velocidad se cobra en cada
+            marcaje.
+
+        El nombre de archivo lleva el hash: asi el navegador nunca revalida y un
+        cambio de modelo es una URL nueva. Los pesos se instalan con
+        tools/install-models.sh.
+
+        REGLA: embedding_version NUNCA se reutiliza. Si cambia cualquier modelo,
+        cambia esta cadena y hay que volver a enrolar, porque vectores de
+        modelos distintos no son comparables.
+    -->
+    <record id="model_profile_yunet_sface_v1" model="olive.attendance.model.profile">
+        <field name="name">YuNet 2026may + SFace fp32</field>
+        <field name="code">yunet_sface_v1</field>
+        <field name="embedding_version">sface_2021dec_fp32_128</field>
+        <field name="embedding_dim">128</field>
+
+        <field name="detector_url">/olive_hr_attendance_face/static/lib/models/yunet_sface_v1/yunet-ebafce4e3c11.onnx</field>
+        <field name="detector_sha256">ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0</field>
+        <field name="detector_bytes">229738</field>
+        <field name="detector_input_size">480</field>
+
+        <field name="embedder_url">/olive_hr_attendance_face/static/lib/models/yunet_sface_v1/sface-0ba9fbfa01b5.onnx</field>
+        <field name="embedder_sha256">0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79</field>
+        <field name="embedder_bytes">38696353</field>
+        <field name="embedder_input_size">112</field>
+
+        <!-- Liveness deshabilitado a proposito: MiniFASNetV2 no tiene un ONNX
+             canonico publicado (el repositorio original distribuye .pth de
+             PyTorch). Hay que resolver la conversion antes de F4. -->
+        <field name="liveness_enabled" eval="False"/>
+
+        <field name="ort_js_url">/olive_hr_attendance_face/static/lib/ort/ort.wasm.min.js</field>
+        <field name="ort_wasm_url">/olive_hr_attendance_face/static/lib/ort/</field>
+
+        <field name="notes">Elegido por medicion en F0. Ver bench/RESULTADOS.md.</field>
+    </record>
+</odoo>

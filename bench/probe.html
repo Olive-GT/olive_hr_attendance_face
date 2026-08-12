@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>F0 · Sonda de modelos</title></head>
+<body>
+<!-- Reporta las formas reales de entrada/salida de cada variante de YuNet y el
+     coste de una pasada a su tamano nativo. Sirve para decidir que export usar:
+     si la entrada es fija, el kiosco tiene que pagar siempre ese tamano. -->
+<pre id="result">corriendo...</pre>
+<script src="./vendor/ort.wasm.min.js"></script>
+<script type="module">
+import { configureOrt, createSession } from "./lib/ort-loader.js";
+import * as yunet from "./lib/yunet.js";
+
+const out = [];
+const say = (m) => { out.push(m); document.getElementById("result").textContent = out.join("\n"); };
+const median = (a) => a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)];
+
+function frame(w, h) {
+    const c = Object.assign(document.createElement("canvas"), { width: w, height: h });
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, "#333"); g.addColorStop(1, "#d8c0a8");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    return c;
+}
+
+try {
+    const ort = configureOrt(window.ort, "./vendor/");
+    const scratch = document.createElement("canvas");
+    const src = frame(640, 480);
+
+    for (const file of ["yunet.onnx", "yunet_2026may.onnx"]) {
+        say(`\n===== ${file} =====`);
+        const s = await createSession(ort, `./vendor/${file}`);
+
+        // Metadatos: es lo que dice si la entrada es fija o dinamica.
+        const md = s.inputMetadata;
+        if (md) {
+            const list = Array.isArray(md) ? md : Object.entries(md).map(([n, v]) => ({ name: n, ...v }));
+            for (const m of list) {
+                say(`  entrada "${m.name}" shape=${JSON.stringify(m.shape ?? m.dimensions ?? "?")} tipo=${m.type ?? "?"}`);
+            }
+        } else {
+            say("  (esta version de ORT no expone inputMetadata)");
+        }
+
+        // Barrido: probamos tamanos y vemos cuales acepta.
+        for (const size of [160, 320, 480, 640]) {
+            try {
+                const times = [];
+                for (let i = 0; i < 6; i++) {
+                    const t = yunet.preprocess(ort, src, size, size, scratch);
+                    const t0 = performance.now();
+                    const o = await s.run({ input: t });
+                    if (i >= 2) times.push(performance.now() - t0);
+                    if (i === 5) {
+                        say(`  ${size}px OK  ${median(times).toFixed(1)} ms  ` +
+                            `(${(1000 / median(times)).toFixed(0)} fps solo detector) ` +
+                            `cls_8=${o.cls_8.dims.join("x")}`);
+                    }
+                }
+            } catch (e) {
+                const msg = String(e.message || e).split("\n")[0].slice(0, 90);
+                say(`  ${size}px RECHAZADO  ${msg}`);
+            }
+        }
+        await s.release?.();
+    }
+    say("\nPROBE-DONE");
+} catch (e) {
+    say(`ERROR: ${e && e.message}`);
+    say("PROBE-DONE");
+}
+</script>
+</body>
+</html>

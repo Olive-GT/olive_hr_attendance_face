@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_olive_face_root"
+              name="Reconocimiento Facial"
+              parent="hr_attendance.menu_hr_attendance_root"
+              sequence="50"
+              groups="olive_hr_attendance_face.group_face_user"/>
+
+    <!-- Operacion diaria -->
+    <menuitem id="menu_olive_face_review"
+              name="Marcajes para revisar"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_punch_review"
+              sequence="10"/>
+
+    <menuitem id="menu_olive_face_punch"
+              name="Todos los marcajes"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_punch"
+              sequence="20"/>
+
+    <!-- Enrolamiento -->
+    <menuitem id="menu_olive_face_consent"
+              name="Consentimientos"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_consent"
+              sequence="30"/>
+
+    <menuitem id="menu_olive_face_template"
+              name="Fotos de identificacion"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_face_template"
+              sequence="35"/>
+
+    <menuitem id="menu_olive_face_process"
+              name="Procesar fotos"
+              parent="menu_olive_face_root"
+              action="action_olive_face_process"
+              sequence="40"/>
+
+    <!-- Infraestructura -->
+    <menuitem id="menu_olive_face_device"
+              name="Kioscos"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_device"
+              sequence="50"/>
+
+    <menuitem id="menu_olive_face_sync_batch"
+              name="Sincronizaciones"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_sync_batch"
+              sequence="60"
+              groups="olive_hr_attendance_face.group_face_manager"/>
+
+    <menuitem id="menu_olive_face_model_profile"
+              name="Perfiles de modelos"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_model_profile"
+              sequence="70"
+              groups="olive_hr_attendance_face.group_face_manager"/>
+
+</odoo>

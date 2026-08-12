@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>F0 · Prueba de humo</title></head>
+<body>
+<!--
+  Prueba de humo sin camara: verifica que los modelos cargan, que las formas de
+  entrada y salida son las esperadas, y que una pasada completa de inferencia
+  corre sin errores. Da ademas el coste real del detector y del embedder, que no
+  depende de si hay un rostro en cuadro.
+
+  Lo que NO verifica es la exactitud de la deteccion; eso exige una cara de
+  verdad delante de la camara y se mide en index.html.
+
+  Corre en Chrome headless:
+    python3 -m http.server 8765 --bind 127.0.0.1 &
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless --disable-gpu --virtual-time-budget=120000 \
+      --dump-dom http://localhost:8765/smoke.html
+-->
+<pre id="result">corriendo...</pre>
+
+<script src="./vendor/ort.wasm.min.js"></script>
+<script type="module">
+import { configureOrt, createSession } from "./lib/ort-loader.js";
+import * as yunet from "./lib/yunet.js";
+import * as align from "./lib/align.js";
+import * as sface from "./lib/sface.js";
+
+const out = [];
+const say = (m) => { out.push(m); document.getElementById("result").textContent = out.join("\n"); };
+const median = (a) => a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)];
+
+/** Lienzo sintetico con degradado y un ovalo: no es una cara, pero ejercita todo el camino. */
+function syntheticFrame(w, h) {
+    const c = Object.assign(document.createElement("canvas"), { width: w, height: h });
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, "#3a3a3a"); g.addColorStop(1, "#d8c0a8");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#c9a084";
+    ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 7, h / 5, 0, 0, 6.283); ctx.fill();
+    return c;
+}
+
+try {
+    const ort = configureOrt(window.ort, "./vendor/");
+    say(`ORT ${ort.env.versions ? ort.env.versions.common : "?"} | hilos=${ort.env.wasm.numThreads} | simd=${ort.env.wasm.simd}`);
+
+    let t = performance.now();
+    const det = await createSession(ort, "./vendor/yunet_2026may.onnx");
+    say(`detector cargado: ${(performance.now() - t).toFixed(0)} ms`);
+    t = performance.now();
+    const emb = await createSession(ort, "./vendor/sface_fp32.onnx");
+    say(`embedder cargado: ${(performance.now() - t).toFixed(0)} ms`);
+
+    // --- contrato de entradas/salidas
+    say(`detector in : ${det.inputNames.join(",")}`);
+    say(`detector out: ${det.outputNames.slice().sort().join(",")}`);
+    say(`embedder in : ${emb.inputNames.join(",")}`);
+    say(`embedder out: ${emb.outputNames.join(",")}`);
+
+    const expected = ["bbox_16","bbox_32","bbox_8","cls_16","cls_32","cls_8",
+                      "kps_16","kps_32","kps_8","obj_16","obj_32","obj_8"];
+    const got = det.outputNames.slice().sort().join(",");
+    say(got === expected.join(",") ? "OK  salidas del detector coinciden con el decodificador"
+                                   : "FALLA  salidas inesperadas del detector");
+
+    // --- detector
+    const frame = syntheticFrame(640, 480);
+    const scratch = document.createElement("canvas");
+    const SIZE = 320;
+    const times = [];
+    let outputs = null;
+    for (let i = 0; i < 8; i++) {
+        const tensor = yunet.preprocess(ort, frame, SIZE, SIZE, scratch);
+        const t0 = performance.now();
+        outputs = await det.run({ input: tensor });
+        if (i >= 3) times.push(performance.now() - t0);
+    }
+    say(`detector @${SIZE}px: mediana ${median(times).toFixed(1)} ms`);
+    const cells = (SIZE / 8) ** 2 + (SIZE / 16) ** 2 + (SIZE / 32) ** 2;
+    const n8 = outputs.cls_8.dims.join("x");
+    say(`cls_8 dims=${n8} | celdas esperadas por el decodificador: ${(SIZE/8)**2}`);
+    say(`bbox_8 dims=${outputs.bbox_8.dims.join("x")} | kps_8 dims=${outputs.kps_8.dims.join("x")}`);
+    const decoded = yunet.decode(outputs, SIZE, SIZE, 0.6);
+    say(`OK  decodificacion sin errores (${decoded.length} candidatos sobre imagen sintetica; 0 es lo normal)`);
+
+    // --- alineacion con puntos sinteticos plausibles
+    const lm = new Float32Array([250,210, 330,210, 290,260, 258,305, 322,305]);
+    const alignCanvas = Object.assign(document.createElement("canvas"), { width: 112, height: 112 });
+    const tr = align.alignTo112(frame, lm, alignCanvas);
+    say(`alineacion: escala=${align.transformScale(tr).toFixed(3)} degenerada=${tr.degenerate}`);
+
+    // Verificacion numerica: la transformada debe llevar los puntos detectados
+    // encima de los de referencia. Si esto falla, el recorte esta mal y SFace
+    // recibiria basura sin que nada mas lo delate.
+    let maxErr = 0;
+    for (let i = 0; i < 5; i++) {
+        const x = tr.a * lm[2*i] - tr.b * lm[2*i+1] + tr.tx;
+        const y = tr.b * lm[2*i] + tr.a * lm[2*i+1] + tr.ty;
+        maxErr = Math.max(maxErr, Math.hypot(x - align.REFERENCE_112[2*i], y - align.REFERENCE_112[2*i+1]));
+    }
+    say(maxErr < 3.0 ? `OK  alineacion correcta (error maximo ${maxErr.toFixed(2)} px)`
+                     : `FALLA  alineacion incorrecta (error maximo ${maxErr.toFixed(2)} px)`);
+
+    // --- embedder
+    const et = [];
+    let vec = null;
+    for (let i = 0; i < 8; i++) {
+        const tensor = sface.preprocess(ort, alignCanvas);
+        const t0 = performance.now();
+        const r = await emb.run({ data: tensor });
+        if (i >= 3) et.push(performance.now() - t0);
+        vec = r[emb.outputNames[0]];
+    }
+    say(`embedder: mediana ${median(et).toFixed(1)} ms | dims=${vec.dims.join("x")}`);
+    say(vec.dims[1] === sface.EMBEDDING_DIM ? `OK  embedding de ${sface.EMBEDDING_DIM} dimensiones`
+                                            : `FALLA  se esperaban ${sface.EMBEDDING_DIM} dimensiones`);
+
+    const norm = sface.l2normalize(vec.data);
+    const self = sface.cosine(norm, norm);
+    say(Math.abs(self - 1) < 1e-4 ? `OK  norma L2 correcta (coseno consigo mismo = ${self.toFixed(6)})`
+                                  : `FALLA  norma L2 incorrecta (${self})`);
+    const b64 = sface.encodeEmbedding(norm);
+    say(b64.length === 684 ? `OK  base64 de ${b64.length} chars (lo que espera el campo del modelo)`
+                           : `AVISO  base64 de ${b64.length} chars, se esperaban 684`);
+
+    const total = median(times) + median(et);
+    say("");
+    say(`PIPELINE (detector+embedder) @${SIZE}px: ${total.toFixed(1)} ms  ->  ${(1000/total).toFixed(1)} fps`);
+    say("Nota: sin preproceso de camara ni alineacion; la medicion real es index.html.");
+    say("SMOKE-DONE");
+} catch (e) {
+    say(`ERROR: ${e && e.message}`);
+    say(e && e.stack ? e.stack : "");
+    say("SMOKE-DONE");
+}
+</script>
+</body>
+</html>

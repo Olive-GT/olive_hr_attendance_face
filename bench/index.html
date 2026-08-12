@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>F0 · Banco de pruebas del pipeline facial</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 24px;
+         max-width: 1100px; margin-inline: auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #666; margin-bottom: 20px; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+  legend { font-weight: 600; padding: 0 6px; }
+  label { display: inline-block; margin-right: 18px; }
+  input[type=text], input[type=number] { padding: 4px 6px; border: 1px solid #bbb;
+         border-radius: 4px; font: inherit; }
+  button { font: inherit; padding: 8px 18px; border-radius: 6px; border: 1px solid #888;
+           background: #1976d2; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #export { background: #555; }
+  .stage { position: relative; width: 640px; max-width: 100%; margin: 16px 0; }
+  #video, #overlay { width: 100%; display: block; border-radius: 8px; }
+  #overlay { position: absolute; inset: 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  th, td { border: 1px solid #ddd; padding: 5px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+  th { background: #f3f3f3; font-size: 12px; }
+  tr.ok td:nth-child(2) { color: #1b5e20; font-weight: 700; }
+  tr.bad td:nth-child(2) { color: #b71c1c; font-weight: 700; }
+  .verdict { padding: 12px 16px; border-radius: 8px; margin-top: 16px; }
+  .verdict.ok { background: #e8f5e9; border: 1px solid #66bb6a; }
+  .verdict.bad { background: #ffebee; border: 1px solid #ef5350; }
+  pre#log { background: #111; color: #0f0; padding: 12px; border-radius: 8px;
+            height: 220px; overflow: auto; font-size: 12px; }
+  @media (prefers-color-scheme: dark) {
+    th { background: #222; } th, td { border-color: #444; }
+    .verdict.ok { background: #14311a; } .verdict.bad { background: #3a1416; }
+  }
+</style>
+</head>
+<body>
+
+<h1>F0 · Banco de pruebas del pipeline facial</h1>
+<p class="sub">
+  YuNet (deteccion + 5 puntos) → alineacion a 112×112 → SFace (embedding 128-D).
+  ONNX Runtime Web, WASM SIMD de un solo hilo.
+  <b>Criterio de terminado de F0: ≥ 5 fps de pipeline completo.</b>
+</p>
+
+<fieldset>
+  <legend>Parametros</legend>
+  <label>Equipo <input type="text" id="label" placeholder="ej. thinkpad-t480" size="16"></label>
+  <label>Tamanos de entrada <input type="text" id="sizes" value="160, 224, 320, 480" size="18"></label>
+  <label>Iteraciones <input type="number" id="iterations" value="30" min="10" max="200" size="4"></label>
+  <label>Umbral deteccion <input type="number" id="threshold" value="0.6" step="0.05" min="0.1" max="0.99" size="4"></label>
+</fieldset>
+
+<button id="start">Iniciar medicion</button>
+<button id="export" disabled>Exportar JSON</button>
+
+<div class="stage">
+  <video id="video" playsinline muted></video>
+  <canvas id="overlay"></canvas>
+</div>
+
+<div id="results"></div>
+<div id="verdict"></div>
+
+<h3>Registro</h3>
+<pre id="log"></pre>
+
+<script src="./vendor/ort.wasm.min.js"></script>
+<script type="module" src="./bench.js"></script>
+</body>
+</html>

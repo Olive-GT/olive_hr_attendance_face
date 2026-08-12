@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_olive_attendance_punch_list" model="ir.ui.view">
+        <field name="name">olive.attendance.punch.list</field>
+        <field name="model">olive.attendance.punch</field>
+        <field name="arch" type="xml">
+            <list decoration-warning="review_state == 'pending'"
+                  decoration-danger="state in ('rejected', 'error')"
+                  decoration-muted="state == 'duplicate'"
+                  create="false">
+                <field name="punch_time"/>
+                <field name="employee_id"/>
+                <field name="direction"/>
+                <field name="method"/>
+                <field name="match_score" widget="percentage" optional="show"/>
+                <field name="margin_score" optional="hide"/>
+                <field name="frames_agreed" optional="hide"/>
+                <field name="clock_confidence" optional="hide"/>
+                <field name="state"/>
+                <field name="review_state"/>
+                <field name="attendance_id" optional="hide"/>
+                <field name="device_id" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_punch_form" model="ir.ui.view">
+        <field name="name">olive.attendance.punch.form</field>
+        <field name="model">olive.attendance.punch</field>
+        <field name="arch" type="xml">
+            <form create="false">
+                <header>
+                    <button name="action_confirm_review" type="object" string="Confirmar"
+                            class="btn-primary" invisible="review_state != 'pending'"/>
+                    <button name="action_reject" type="object" string="Rechazar"
+                            invisible="review_state != 'pending'"/>
+                    <button name="action_force_fold" type="object" string="Reintentar doblado"
+                            invisible="state != 'queued'"
+                            groups="olive_hr_attendance_face.group_face_manager"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="queued,applied"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Requiere revision" bg_color="text-bg-warning"
+                            invisible="review_state != 'pending'"/>
+                    <group>
+                        <group string="Identificacion">
+                            <field name="employee_id"
+                                   readonly="not context.get('allow_reassign') and state == 'applied'"/>
+                            <field name="method"/>
+                            <field name="direction"/>
+                            <field name="match_score" widget="percentage"/>
+                            <field name="margin_score"/>
+                            <field name="frames_agreed"/>
+                            <field name="liveness_score"/>
+                            <field name="runner_up_employee_id"/>
+                        </group>
+                        <group string="Origen y tiempo">
+                            <field name="device_id"/>
+                            <field name="punch_time"/>
+                            <field name="device_time"/>
+                            <field name="clock_offset_seconds"/>
+                            <field name="clock_confidence"/>
+                            <field name="uuid"/>
+                            <field name="batch_id"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Resultado">
+                            <field name="attendance_id"/>
+                            <field name="attendance_field"/>
+                            <field name="fold_attempts"/>
+                            <field name="embedding_version"/>
+                        </group>
+                        <group string="Revision">
+                            <field name="review_state"/>
+                            <field name="reviewed_by_uid"/>
+                            <field name="reviewed_date"/>
+                            <field name="review_note" placeholder="Motivo de la decision..."/>
+                        </group>
+                    </group>
+                    <field name="error_message" readonly="1" invisible="not error_message"/>
+                    <group string="Foto de auditoria" invisible="not snapshot">
+                        <field name="snapshot" widget="image" nolabel="1" readonly="1"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_punch_search" model="ir.ui.view">
+        <field name="name">olive.attendance.punch.search</field>
+        <field name="model">olive.attendance.punch</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="employee_id"/>
+                <field name="device_id"/>
+                <filter name="f_review" string="Requieren revision"
+                        domain="[('review_state', '=', 'pending')]"/>
+                <filter name="f_unidentified" string="Sin identificar"
+                        domain="[('employee_id', '=', False)]"/>
+                <filter name="f_queued" string="Sin doblar"
+                        domain="[('state', '=', 'queued')]"/>
+                <filter name="f_bad_clock" string="Reloj dudoso"
+                        domain="[('clock_confidence', '!=', 'good')]"/>
+                <separator/>
+                <filter name="f_today" string="Hoy"
+                        domain="[('punch_time', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="g_employee" string="Empleado" context="{'group_by': 'employee_id'}"/>
+                    <filter name="g_state" string="Estado" context="{'group_by': 'state'}"/>
+                    <filter name="g_device" string="Kiosco" context="{'group_by': 'device_id'}"/>
+                    <filter name="g_day" string="Dia" context="{'group_by': 'punch_time:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_olive_attendance_punch" model="ir.actions.act_window">
+        <field name="name">Marcajes del kiosco</field>
+        <field name="res_model">olive.attendance.punch</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_f_today': 1}</field>
+    </record>
+
+    <record id="action_olive_attendance_punch_review" model="ir.actions.act_window">
+        <field name="name">Marcajes para revisar</field>
+        <field name="res_model">olive.attendance.punch</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_f_review': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay nada que revisar</p>
+            <p>Aqui aparecen los marcajes que el kiosco registro sin plena certeza,
+               y los que no pudo identificar. Nada se descarta en silencio.</p>
+        </field>
+    </record>
+
+</odoo>

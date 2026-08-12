@@ -1,2 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Los pesos de los modelos viajan dentro del modulo a proposito (ver plan,
+# seccion 7): instalar en un cliente nuevo debe ser "git clone" + "-i", sin
+# configurar infraestructura ni instalar git-lfs en el servidor.
+#
+# Se guardan como binarios normales de git y NO via LFS, justamente para no
+# anadir git-lfs como requisito del servidor. Son ~52 MB que se clonan una vez.
+*.onnx binary
+*.wasm binary

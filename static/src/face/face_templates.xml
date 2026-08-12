@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="olive_hr_attendance_face.FaceProcess">
+    <div class="o_olive_face p-4 h-100 overflow-auto">
+
+        <div t-if="state.phase === 'loading'" class="d-flex flex-column align-items-center gap-3 py-5">
+            <div class="spinner-border text-primary"/>
+            <div t-esc="state.progress"/>
+        </div>
+
+        <div t-if="state.phase === 'error'" class="alert alert-danger">
+            <h4>No se pudo iniciar</h4>
+            <p t-esc="state.error"/>
+        </div>
+
+        <div t-if="state.phase !== 'loading' and state.phase !== 'error'">
+            <h3>Procesar fotos de identificacion</h3>
+            <p class="text-muted">
+                Calcula el vector de cada foto pendiente. Cubre las tres procedencias:
+                la foto de la ficha del empleado, las fotos subidas y las capturas con
+                camara. El calculo ocurre en este navegador; el servidor solo guarda
+                el resultado.
+            </p>
+
+            <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+                <span class="badge text-bg-primary fs-6">
+                    <t t-esc="state.rows.length"/> fotos pendientes
+                </span>
+                <span t-if="state.withoutPhoto.length" class="badge text-bg-warning fs-6">
+                    <t t-esc="state.withoutPhoto.length"/> empleados sin ninguna foto
+                </span>
+                <button class="btn btn-primary ms-auto"
+                        t-att-disabled="state.phase === 'running' or !state.rows.length"
+                        t-on-click="run">
+                    <i class="fa fa-bolt me-2"/>Procesar
+                </button>
+            </div>
+
+            <div t-if="state.phase === 'running'" class="progress mb-3" style="height: 20px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                     t-attf-style="width: {{ state.rows.length ? (state.done / state.rows.length * 100) : 0 }}%">
+                    <t t-esc="state.done"/> / <t t-esc="state.rows.length"/>
+                </div>
+            </div>
+
+            <div t-if="state.phase === 'done'" class="alert alert-info d-flex gap-4 flex-wrap">
+                <span><b t-esc="state.summary.ok"/> procesadas</span>
+                <span t-if="state.summary.no_face"><b t-esc="state.summary.no_face"/> sin rostro</span>
+                <span t-if="state.summary.ambiguous"><b t-esc="state.summary.ambiguous"/> con varias caras</span>
+                <span t-if="state.summary.too_small"><b t-esc="state.summary.too_small"/> con rostro muy pequeno</span>
+                <span t-if="state.summary.error"><b t-esc="state.summary.error"/> con error</span>
+            </div>
+
+            <div t-if="state.phase === 'done' and hasFailures" class="alert alert-secondary small">
+                Para las que fallaron hay que reemplazar la foto: de frente, ojos
+                visibles, sin lentes oscuros, luz pareja y <b>una sola persona en la
+                imagen</b>. Un selfie reciente suele servir mejor que una foto de
+                carnet vieja.
+            </div>
+
+            <table t-if="state.rows.length" class="table table-sm">
+                <thead>
+                    <tr><th>Empleado</th><th>Foto</th><th>Origen</th><th>Resultado</th><th>Detalle</th></tr>
+                </thead>
+                <tbody>
+                    <tr t-foreach="state.rows" t-as="row" t-key="row.id">
+                        <td t-esc="row.employee_name"/>
+                        <td t-esc="row.name"/>
+                        <td class="text-muted small" t-esc="row.source"/>
+                        <td><span class="badge" t-att-class="statusClass(row)" t-esc="statusLabel(row)"/></td>
+                        <td class="small text-muted" t-esc="row.message"/>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div t-if="state.withoutPhoto.length" class="mt-3">
+                <h6>Empleados sin ninguna foto</h6>
+                <p class="text-muted small">
+                    Suban la foto en la ficha del empleado, como cualquier otra foto de
+                    Odoo, y vuelvan a procesar.
+                </p>
+                <div class="d-flex flex-wrap gap-1">
+                    <span t-foreach="state.withoutPhoto" t-as="e" t-key="e.id"
+                          class="badge text-bg-light text-dark" t-esc="e.name"/>
+                </div>
+            </div>
+        </div>
+    </div>
+</t>
+
+
+<t t-name="olive_hr_attendance_face.FaceVerify">
+    <div class="o_olive_face d-flex flex-column h-100">
+
+        <div t-if="state.phase === 'loading'" class="d-flex flex-column align-items-center justify-content-center h-100 gap-3">
+            <div class="spinner-border text-primary"/>
+            <div class="fs-5" t-esc="state.progress"/>
+        </div>
+
+        <div t-if="state.phase === 'error'" class="p-4">
+            <div class="alert alert-danger">
+                <h4>No se pudo iniciar</h4>
+                <p t-esc="state.error"/>
+                <hr/>
+                <p class="mb-0 small">
+                    Causas frecuentes: no se dio permiso a la camara, o el servidor no
+                    esta en HTTPS. Sin conexion segura el navegador no permite usar la
+                    camara, ni siquiera con permiso concedido.
+                </p>
+            </div>
+        </div>
+
+        <div t-if="state.phase === 'ready'" class="d-flex flex-grow-1 overflow-hidden">
+            <div class="flex-grow-1 d-flex flex-column p-3 overflow-auto">
+                <h4 t-esc="state.employeeName"/>
+
+                <div class="o_olive_stage position-relative bg-dark rounded">
+                    <video t-ref="video" playsinline="true" muted="true" class="w-100 d-block rounded"/>
+                    <canvas t-ref="overlay" class="position-absolute top-0 start-0 w-100 h-100"/>
+                </div>
+
+                <div class="d-flex align-items-center gap-3 mt-2 flex-wrap">
+                    <span class="badge" t-att-class="state.live.detected ? 'text-bg-success' : 'text-bg-secondary'"
+                          t-esc="liveMessage"/>
+                    <span class="text-muted small">Rostro: <b t-esc="state.live.facePx"/> px</span>
+                </div>
+
+                <div class="mt-3">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <span class="badge fs-6" t-att-class="verdictClass" t-esc="verdictText"/>
+                        <span class="fs-3 font-monospace" t-esc="state.score.toFixed(3)"/>
+                        <span t-if="state.bestName" class="text-muted small">
+                            mejor coincidencia: <b t-esc="state.bestName"/>
+                        </span>
+                    </div>
+                    <div class="progress mt-2" style="height: 10px;">
+                        <div class="progress-bar" t-att-class="verdictClass"
+                             t-attf-style="width: {{ Math.max(0, Math.min(100, state.score * 100)) }}%"/>
+                    </div>
+                </div>
+            </div>
+
+            <div class="o_olive_side border-start p-3 overflow-auto">
+                <div t-if="state.consentState !== 'granted'" class="alert alert-warning small">
+                    <b>Falta el consentimiento biometrico.</b>
+                    Se pueden guardar fotos, pero no activarlas hasta registrarlo.
+                </div>
+
+                <h6>Fotos que se estan comparando</h6>
+                <div t-if="!state.templates.length" class="text-muted small">
+                    Ninguna. Subi una foto en la ficha del empleado y procesala, o
+                    capturala aqui con la camara.
+                </div>
+                <div t-foreach="state.templates" t-as="tpl" t-key="tpl.id"
+                     class="border-bottom py-2 small">
+                    <t t-esc="tpl.name"/>
+                    <span class="text-muted"> · <t t-esc="tpl.source or 'camara'"/></span>
+                </div>
+
+                <hr/>
+                <h6>Agregar captura con camara</h6>
+                <p class="text-muted small">
+                    Vale mas que una foto de archivo: se toma en las condiciones reales.
+                    Hacelo con el casco y los lentes puestos si asi entra a la planta.
+                </p>
+                <select class="form-select form-select-sm mb-2"
+                        t-on-change="(ev) => this.state.condition = ev.target.value">
+                    <option t-foreach="conditions" t-as="c" t-key="c" t-att-value="c" t-esc="c"/>
+                </select>
+                <button class="btn btn-primary w-100"
+                        t-att-disabled="!state.live.detected or state.busy"
+                        t-on-click="addPhoto">
+                    <i class="fa fa-camera me-2"/>Capturar y agregar
+                </button>
+
+                <button class="btn btn-link w-100 mt-2" t-on-click="openPhotos">
+                    Ver todas las fotos de esta persona
+                </button>
+
+                <div class="alert alert-info small mt-3 mb-0">
+                    Si otra persona se prueba aqui contra estas fotos, su puntaje
+                    deberia quedar <b>claramente por debajo</b> del umbral. Eso es lo
+                    que confirma que las fotos sirven.
+                </div>
+            </div>
+        </div>
+    </div>
+</t>
+
+</templates>

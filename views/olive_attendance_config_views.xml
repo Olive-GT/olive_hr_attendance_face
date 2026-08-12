@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================= Perfil de modelos ================= -->
+
+    <record id="view_olive_attendance_model_profile_list" model="ir.ui.view">
+        <field name="name">olive.attendance.model.profile.list</field>
+        <field name="model">olive.attendance.model.profile</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="embedding_version"/>
+                <field name="embedding_dim"/>
+                <field name="liveness_enabled"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_model_profile_form" model="ir.ui.view">
+        <field name="name">olive.attendance.model.profile.form</field>
+        <field name="model">olive.attendance.model.profile</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="alert alert-warning" role="alert">
+                        <b>embedding_version nunca se reutiliza.</b> Dos vectores solo
+                        son comparables si comparten esa cadena: cambiar de modelo sin
+                        cambiarla deja al kiosco reconociendo mal sin que nada lo delate.
+                        Al cambiar de perfil hay que volver a enrolar a todo el personal.
+                    </div>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="code"/>
+                            <field name="embedding_version"/>
+                            <field name="embedding_dim"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Detector">
+                            <group>
+                                <field name="detector_url"/>
+                                <field name="detector_sha256"/>
+                                <field name="detector_bytes"/>
+                                <field name="detector_input_size"/>
+                            </group>
+                        </page>
+                        <page string="Embedder">
+                            <group>
+                                <field name="embedder_url"/>
+                                <field name="embedder_sha256"/>
+                                <field name="embedder_bytes"/>
+                                <field name="embedder_input_size"/>
+                            </group>
+                        </page>
+                        <page string="Deteccion de vida">
+                            <group>
+                                <field name="liveness_enabled"/>
+                                <field name="liveness_url"/>
+                                <field name="liveness_sha256"/>
+                                <field name="liveness_bytes"/>
+                                <field name="liveness_input_size"/>
+                            </group>
+                        </page>
+                        <page string="Runtime">
+                            <group>
+                                <field name="ort_js_url"/>
+                                <field name="ort_wasm_url"/>
+                            </group>
+                        </page>
+                        <page string="Notas">
+                            <field name="notes" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_olive_attendance_model_profile" model="ir.actions.act_window">
+        <field name="name">Perfiles de modelos</field>
+        <field name="res_model">olive.attendance.model.profile</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ================= Lotes de sincronizacion ================= -->
+
+    <record id="view_olive_attendance_sync_batch_list" model="ir.ui.view">
+        <field name="name">olive.attendance.sync.batch.list</field>
+        <field name="model">olive.attendance.sync.batch</field>
+        <field name="arch" type="xml">
+            <list decoration-warning="rejected_count &gt; 0" create="false">
+                <field name="received_date"/>
+                <field name="device_id"/>
+                <field name="punch_count"/>
+                <field name="accepted_count"/>
+                <field name="duplicate_count"/>
+                <field name="rejected_count"/>
+                <field name="queue_depth_after"/>
+                <field name="clock_confidence" optional="hide"/>
+                <field name="client_batch_seq" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_sync_batch_form" model="ir.ui.view">
+        <field name="name">olive.attendance.sync.batch.form</field>
+        <field name="model">olive.attendance.sync.batch</field>
+        <field name="arch" type="xml">
+            <form create="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="device_id"/>
+                            <field name="received_date"/>
+                            <field name="client_sent_date"/>
+                            <field name="client_batch_seq"/>
+                            <field name="payload_bytes"/>
+                        </group>
+                        <group>
+                            <field name="punch_count"/>
+                            <field name="accepted_count"/>
+                            <field name="duplicate_count"/>
+                            <field name="rejected_count"/>
+                            <field name="queue_depth_after"/>
+                            <field name="clock_offset_seconds"/>
+                            <field name="clock_confidence"/>
+                        </group>
+                    </group>
+                    <field name="notes" invisible="not notes"/>
+                    <field name="punch_ids" readonly="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_olive_attendance_sync_batch" model="ir.actions.act_window">
+        <field name="name">Lotes de sincronizacion</field>
+        <field name="res_model">olive.attendance.sync.batch</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ================= Ajustes ================= -->
+
+    <record id="view_res_config_settings_olive_face" model="ir.ui.view">
+        <field name="name">res.config.settings.olive.face</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="hr_attendance.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <!-- Anclado a la app y no a un bloque concreto ni a last(): es el
+                 punto de insercion mas estable frente a cambios del core. -->
+            <xpath expr="//app[@name='hr_attendance']" position="inside">
+                <block title="Reconocimiento Facial" name="olive_face_block"
+                       groups="olive_hr_attendance_face.group_face_manager">
+                    <setting string="Perfil de modelos"
+                             help="Los umbrales bajan solos al kiosco: la calibracion se hace en remoto.">
+                        <field name="olive_face_model_profile_id"/>
+                    </setting>
+                    <setting string="Umbrales de identificacion">
+                        <div class="content-group">
+                            <div class="row"><label for="olive_face_match_threshold" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_match_threshold"/></div>
+                            <div class="row"><label for="olive_face_review_threshold" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_review_threshold"/></div>
+                            <div class="row"><label for="olive_face_margin_min" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_margin_min"/></div>
+                            <div class="row"><label for="olive_face_frames_required" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_frames_required"/></div>
+                            <div class="row"><label for="olive_face_cooldown_seconds" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_cooldown_seconds"/></div>
+                            <div class="row"><label for="olive_face_ambiguous_size_ratio" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_ambiguous_size_ratio"/></div>
+                        </div>
+                    </setting>
+                    <setting string="Calidad de captura">
+                        <div class="content-group">
+                            <div class="row"><label for="olive_face_detector_input_size" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_detector_input_size"/></div>
+                            <div class="row"><label for="olive_face_min_face_px" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_min_face_px"/></div>
+                            <div class="row"><label for="olive_face_min_templates" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_min_templates"/></div>
+                            <div class="row"><label for="olive_face_liveness_required" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_liveness_required"/></div>
+                            <div class="row"><label for="olive_face_liveness_threshold" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_liveness_threshold"/></div>
+                        </div>
+                    </setting>
+                    <setting string="Reloj y doblado">
+                        <div class="content-group">
+                            <div class="row"><label for="olive_face_max_clock_drift_seconds" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_max_clock_drift_seconds"/></div>
+                            <div class="row"><label for="olive_face_reject_clock_drift_seconds" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_reject_clock_drift_seconds"/></div>
+                            <div class="row"><label for="olive_face_toggle_gap_seconds" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_toggle_gap_seconds"/></div>
+                            <div class="row"><label for="olive_face_max_shift_hours" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_max_shift_hours"/></div>
+                            <div class="row"><label for="olive_face_day_cutoff_hour" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_day_cutoff_hour"/></div>
+                            <div class="row"><label for="olive_face_protect_validated" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_protect_validated"/></div>
+                            <div class="row"><label for="olive_face_fold_inline" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_fold_inline"/></div>
+                        </div>
+                    </setting>
+                    <setting string="Privacidad" help="Los embeddings son dato biometrico.">
+                        <div class="content-group">
+                            <div class="row"><label for="olive_face_store_snapshot" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_store_snapshot"/></div>
+                            <div class="row"><label for="olive_face_snapshot_retention_days" class="col-lg-6 o_light_label"/>
+                                <field name="olive_face_snapshot_retention_days"/></div>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="module_category_olive_face" model="ir.module.category">
+        <field name="name">Asistencia Facial</field>
+        <field name="description">Kiosco de ingresos y egresos por reconocimiento facial.</field>
+        <field name="sequence">96</field>
+    </record>
+
+    <!--
+        Dos niveles. La distincion importa porque los datos son biometricos:
+        el operador enrola y revisa; solo el gestor ve los secretos del
+        dispositivo, reasigna marcajes mal identificados y puede borrar.
+    -->
+    <record id="group_face_user" model="res.groups">
+        <field name="name">Operador</field>
+        <field name="category_id" ref="module_category_olive_face"/>
+        <field name="implied_ids" eval="[(4, ref('hr.group_hr_user'))]"/>
+        <field name="comment">Enrola empleados, registra consentimientos y revisa
+            los marcajes dudosos. No ve el token ni la clave de los kioscos.</field>
+    </record>
+
+    <record id="group_face_manager" model="res.groups">
+        <field name="name">Gestor</field>
+        <field name="category_id" ref="module_category_olive_face"/>
+        <field name="implied_ids" eval="[(4, ref('group_face_user')), (4, ref('hr.group_hr_manager'))]"/>
+        <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+        <field name="comment">Administra kioscos y sus secretos, ajusta los umbrales,
+            reasigna marcajes sin identificar y puede borrar registros.</field>
+    </record>
+
+    <!--
+        Reglas multi-compania. La suite hermana no tiene ninguna ir.rule, pero
+        aqui si corresponde: son datos biometricos y no deben cruzarse entre
+        companias.
+    -->
+    <record id="rule_device_company" model="ir.rule">
+        <field name="name">Kioscos: solo de las companias permitidas</field>
+        <field name="model_id" ref="model_olive_attendance_device"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="rule_face_template_company" model="ir.rule">
+        <field name="name">Plantillas faciales: solo de las companias permitidas</field>
+        <field name="model_id" ref="model_olive_attendance_face_template"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="rule_consent_company" model="ir.rule">
+        <field name="name">Consentimientos: solo de las companias permitidas</field>
+        <field name="model_id" ref="model_olive_attendance_consent"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="rule_punch_company" model="ir.rule">
+        <field name="name">Marcajes: solo de las companias permitidas</field>
+        <field name="model_id" ref="model_olive_attendance_punch"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="rule_sync_batch_company" model="ir.rule">
+        <field name="name">Lotes de sincronizacion: solo de las companias permitidas</field>
+        <field name="model_id" ref="model_olive_attendance_sync_batch"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+</odoo>

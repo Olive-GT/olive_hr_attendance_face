@@ -1,0 +1,12 @@
+*.pyc
+__pycache__/
+*.pyo
+.DS_Store
+
+# Banco de pruebas F0: pesos y runtime descargables, ~60 MB. Se reconstruyen
+# con bench/fetch-models.sh. Los pesos definitivos del modulo son otros y viven
+# en static/lib/models/ via Git LFS.
+bench/vendor/
+
+# Resultados del banco: son de cada maquina, no del repo
+bench/results/*.json

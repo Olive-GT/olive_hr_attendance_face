@@ -1,0 +1,14 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_model_profile_user,olive.attendance.model.profile operador,model_olive_attendance_model_profile,olive_hr_attendance_face.group_face_user,1,0,0,0
+access_model_profile_manager,olive.attendance.model.profile gestor,model_olive_attendance_model_profile,olive_hr_attendance_face.group_face_manager,1,1,1,1
+access_device_user,olive.attendance.device operador,model_olive_attendance_device,olive_hr_attendance_face.group_face_user,1,0,0,0
+access_device_manager,olive.attendance.device gestor,model_olive_attendance_device,olive_hr_attendance_face.group_face_manager,1,1,1,1
+access_consent_user,olive.attendance.consent operador,model_olive_attendance_consent,olive_hr_attendance_face.group_face_user,1,1,1,0
+access_consent_manager,olive.attendance.consent gestor,model_olive_attendance_consent,olive_hr_attendance_face.group_face_manager,1,1,1,1
+access_face_template_user,olive.attendance.face.template operador,model_olive_attendance_face_template,olive_hr_attendance_face.group_face_user,1,1,1,0
+access_face_template_manager,olive.attendance.face.template gestor,model_olive_attendance_face_template,olive_hr_attendance_face.group_face_manager,1,1,1,1
+access_punch_user,olive.attendance.punch operador,model_olive_attendance_punch,olive_hr_attendance_face.group_face_user,1,1,0,0
+access_punch_manager,olive.attendance.punch gestor,model_olive_attendance_punch,olive_hr_attendance_face.group_face_manager,1,1,1,1
+access_sync_batch_user,olive.attendance.sync.batch operador,model_olive_attendance_sync_batch,olive_hr_attendance_face.group_face_user,1,0,0,0
+access_sync_batch_manager,olive.attendance.sync.batch gestor,model_olive_attendance_sync_batch,olive_hr_attendance_face.group_face_manager,1,1,1,1
+access_tombstone_manager,olive.attendance.tombstone gestor,model_olive_attendance_tombstone,olive_hr_attendance_face.group_face_manager,1,0,0,1

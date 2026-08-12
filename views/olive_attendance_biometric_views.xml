@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================= Fotos de identificacion ================= -->
+
+    <record id="view_olive_attendance_face_template_kanban" model="ir.ui.view">
+        <field name="name">olive.attendance.face.template.kanban</field>
+        <field name="model">olive.attendance.face.template</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex gap-2">
+                            <field name="image_128" widget="image" class="o_image_64_cover"/>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold"><field name="name"/></div>
+                                <div class="text-muted small"><field name="employee_id"/></div>
+                                <div class="mt-1">
+                                    <field name="compute_state" widget="badge"
+                                           decoration-success="compute_state == 'ok'"
+                                           decoration-danger="compute_state in ('no_face', 'error')"
+                                           decoration-warning="compute_state in ('ambiguous', 'too_small')"/>
+                                    <field name="state" widget="badge"
+                                           decoration-success="state == 'active'"/>
+                                </div>
+                                <div class="text-muted small"><field name="source"/></div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_face_template_list" model="ir.ui.view">
+        <field name="name">olive.attendance.face.template.list</field>
+        <field name="model">olive.attendance.face.template</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'archived'"
+                  decoration-danger="compute_state in ('no_face', 'error')"
+                  decoration-warning="compute_state in ('ambiguous', 'too_small')">
+                <field name="sequence" widget="handle"/>
+                <field name="image_128" widget="image" width="60px" options="{'size': [50, 50]}"/>
+                <field name="employee_id"/>
+                <field name="name"/>
+                <field name="source"/>
+                <field name="compute_state"/>
+                <field name="state"/>
+                <field name="quality_score" optional="show"/>
+                <field name="face_px" optional="hide"/>
+                <field name="luminance" optional="hide"/>
+                <field name="embedding_version" optional="hide"/>
+                <field name="compute_message" optional="hide"/>
+                <button name="action_activate" type="object" string="Activar" icon="fa-check"
+                        invisible="state == 'active' or compute_state != 'ok'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_face_template_form" model="ir.ui.view">
+        <field name="name">olive.attendance.face.template.form</field>
+        <field name="model">olive.attendance.face.template</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_activate" type="object" string="Activar"
+                            class="btn-primary" invisible="state == 'active' or compute_state != 'ok'"/>
+                    <button name="action_reprocess" type="object" string="Reprocesar"
+                            invisible="compute_state == 'pending'"/>
+                    <button name="action_archive_template" type="object" string="Archivar"
+                            invisible="state == 'archived'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-info" role="alert">
+                        La <b>foto</b> es la fuente de verdad; el vector es un derivado.
+                        Guardarla permite recalcular los vectores si algun dia cambia el
+                        modelo, sin volver a llamar a nadie. Es dato biometrico: acceso
+                        restringido y sujeto a consentimiento.
+                    </div>
+                    <field name="image" widget="image" class="oe_avatar"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="Frontal / con casco / con lentes"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="employee_id"/>
+                            <field name="source"/>
+                            <field name="sequence"/>
+                            <field name="capture_date"/>
+                            <field name="captured_by_uid"/>
+                        </group>
+                        <group string="Procesamiento">
+                            <field name="compute_state"/>
+                            <field name="compute_message" invisible="not compute_message"/>
+                            <field name="quality_score"/>
+                            <field name="face_px"/>
+                            <field name="luminance"/>
+                            <field name="embedding_version"/>
+                            <field name="dim"/>
+                        </group>
+                    </group>
+                    <field name="embedding" invisible="1"/>
+                    <field name="active" invisible="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_face_template_search" model="ir.ui.view">
+        <field name="name">olive.attendance.face.template.search</field>
+        <field name="model">olive.attendance.face.template</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="employee_id"/>
+                <filter name="f_pending" string="Sin procesar"
+                        domain="[('compute_state', '=', 'pending')]"/>
+                <filter name="f_failed" string="Con problema"
+                        domain="[('compute_state', 'not in', ('pending', 'ok'))]"/>
+                <filter name="f_active" string="Activas" domain="[('state', '=', 'active')]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="g_employee" string="Empleado" context="{'group_by': 'employee_id'}"/>
+                    <filter name="g_source" string="Origen" context="{'group_by': 'source'}"/>
+                    <filter name="g_compute" string="Procesamiento" context="{'group_by': 'compute_state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_olive_face_process" model="ir.actions.client">
+        <field name="name">Procesar fotos</field>
+        <field name="tag">olive_face_process</field>
+    </record>
+
+    <record id="action_olive_attendance_face_template" model="ir.actions.act_window">
+        <field name="name">Fotos de identificacion</field>
+        <field name="res_model">olive.attendance.face.template</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Todavia no hay fotos</p>
+            <p>Las fotos de las fichas de empleado se toman solas al procesar.
+               Tambien se pueden subir aqui o capturar con la camara.</p>
+        </field>
+    </record>
+
+    <!-- ================= Consentimiento ================= -->
+
+    <record id="view_olive_attendance_consent_list" model="ir.ui.view">
+        <field name="name">olive.attendance.consent.list</field>
+        <field name="model">olive.attendance.consent</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'granted'" decoration-danger="state == 'revoked'">
+                <field name="employee_id"/>
+                <field name="state"/>
+                <field name="method"/>
+                <field name="granted_date"/>
+                <field name="allow_snapshot"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_consent_form" model="ir.ui.view">
+        <field name="name">olive.attendance.consent.form</field>
+        <field name="model">olive.attendance.consent</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_grant" type="object" string="Registrar consentimiento"
+                            class="btn-primary" invisible="state == 'granted'"/>
+                    <button name="action_revoke" type="object" string="Revocar"
+                            confirm="Revocar archiva de inmediato TODAS las fotos faciales del empleado y dejara de poder marcar por rostro. ¿Continuar?"
+                            invisible="state != 'granted'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="employee_id"/>
+                            <field name="method"/>
+                            <field name="granted_date"/>
+                            <field name="revoked_date" invisible="state != 'revoked'"/>
+                        </group>
+                        <group string="Permisos otorgados">
+                            <field name="allow_snapshot"/>
+                            <field name="allow_thumbnail"/>
+                        </group>
+                    </group>
+                    <group string="Documento firmado">
+                        <field name="document" filename="document_filename" nolabel="1"/>
+                        <field name="document_filename" invisible="1"/>
+                    </group>
+                    <field name="notes" placeholder="Observaciones..."/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_olive_attendance_consent" model="ir.actions.act_window">
+        <field name="name">Consentimientos biometricos</field>
+        <field name="res_model">olive.attendance.consent</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>
