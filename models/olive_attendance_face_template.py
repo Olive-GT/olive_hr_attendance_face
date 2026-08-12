@@ -23,11 +23,14 @@ Dato biometrico: acceso restringido.
 
 import base64
 import binascii
+import logging
 import math
 import struct
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 # Tolerancia sobre la norma L2. El vector viaja normalizado desde el navegador;
 # la holgura solo absorbe el redondeo de float32.
@@ -186,6 +189,30 @@ class OliveAttendanceFaceTemplate(models.Model):
     def action_activate(self):
         self.write({"state": "active"})
 
+    @api.model
+    def olive_activate_all_processed(self):
+        """Activa todas las fotos ya procesadas de la compania.
+
+        Existe para las fotos que se procesaron antes de que la activacion fuera
+        automatica. Devuelve cuantas activo.
+        """
+        company = self.env.company
+        pending = self.sudo().search([
+            ("employee_id.company_id", "=", company.id),
+            ("compute_state", "=", "ok"),
+            ("state", "=", "draft"),
+            ("active", "=", True),
+        ])
+        activated = self.browse()
+        for tpl in pending:
+            try:
+                tpl.action_activate()
+                activated |= tpl
+            except ValidationError as err:
+                _logger.warning(
+                    "No se pudo activar la foto %s: %s", tpl.display_name, err)
+        return len(activated)
+
     def action_archive_template(self):
         self.write({"state": "archived", "active": False})
 
@@ -212,6 +239,18 @@ class OliveAttendanceFaceTemplate(models.Model):
                 "face_px": int(result.get("face_px") or 0),
                 "luminance": result.get("luminance", 0.0),
             })
+            # Una foto procesada correctamente se activa sola. Separar los dos
+            # pasos solo tenia sentido cuando activar exigia consentimiento
+            # previo; sin eso, obligar a un clic mas por persona es friccion sin
+            # contrapartida, y ademas es el paso que la gente olvida y deja al
+            # kiosco sin reconocer a nadie.
+            company = self.company_id
+            consent_pending = (
+                company.olive_face_require_consent
+                and self.employee_id.olive_consent_state != "granted"
+            )
+            if self.state == "draft" and not consent_pending:
+                vals["state"] = "active"
         else:
             vals.update({"embedding": False, "state": "draft"})
         # Se llama a super().write para no disparar el reseteo a 'pending' de

@@ -38,7 +38,13 @@
                 <span t-if="state.withoutPhoto.length" class="badge text-bg-warning fs-6">
                     <t t-esc="state.withoutPhoto.length"/> empleados sin ninguna foto
                 </span>
-                <button class="btn btn-primary ms-auto"
+                <button class="btn btn-secondary ms-auto"
+                        t-att-disabled="state.phase === 'running'"
+                        t-on-click="activateAll"
+                        title="Para las fotos procesadas antes de que la activacion fuera automatica">
+                    <i class="fa fa-check me-2"/>Activar las ya procesadas
+                </button>
+                <button class="btn btn-primary"
                         t-att-disabled="state.phase === 'running' or !state.rows.length"
                         t-on-click="run">
                     <i class="fa fa-bolt me-2"/>Procesar

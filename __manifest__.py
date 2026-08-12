@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Asistencias por Reconocimiento Facial (Kiosco PWA)",
-    "version": "18.0.7.1.0",
+    "version": "18.0.7.2.0",
     "category": "Human Resources/Attendances",
     "summary": "Kiosco de ingresos y egresos por rostro, con reconocimiento en el navegador y tolerancia a cortes de red y energia",
     "author": "URBOP / OliveGT",

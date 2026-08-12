@@ -51,6 +51,21 @@ export class FaceProcess extends Component {
         onMounted(() => this.load());
     }
 
+    /** Activa las fotos que se procesaron antes de la activacion automatica. */
+    async activateAll() {
+        try {
+            const count = await this.orm.call(
+                "olive.attendance.face.template", "olive_activate_all_processed", []);
+            this.notification.add(
+                count
+                    ? _t("%s foto(s) activadas. Ya se pueden usar para reconocer.", count)
+                    : _t("No habia fotos procesadas pendientes de activar."),
+                { type: count ? "success" : "info" });
+        } catch (err) {
+            this.notification.add(errorText(err), { type: "danger" });
+        }
+    }
+
     async load() {
         try {
             const ids = this.props.action?.params?.employee_ids || null;
