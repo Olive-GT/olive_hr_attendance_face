@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_olive_attendance_absence_list" model="ir.ui.view">
+        <field name="name">olive.attendance.absence.list</field>
+        <field name="model">olive.attendance.absence</field>
+        <field name="arch" type="xml">
+            <list decoration-danger="state == 'confirmed'"
+                  decoration-warning="state == 'candidate'"
+                  decoration-muted="state == 'dismissed'">
+                <field name="absence_date"/>
+                <field name="employee_id"/>
+                <field name="department_id" optional="show"/>
+                <field name="state"/>
+                <field name="reason" optional="show"/>
+                <field name="confidence" widget="percentage" optional="show"/>
+                <field name="peers_present" optional="hide"/>
+                <field name="peers_total" optional="hide"/>
+                <field name="gap_length" optional="hide"/>
+                <field name="reviewed_by_uid" optional="hide"/>
+                <button name="action_confirm" type="object" string="Confirmar"
+                        icon="fa-times-circle" invisible="state == 'confirmed'"
+                        confirm="Confirmar la ausencia significa que ese dia se puede descontar de la nomina. ¿Seguro?"/>
+                <button name="action_justify" type="object" string="Justificar"
+                        icon="fa-check" invisible="state == 'justified'"/>
+                <button name="action_dismiss" type="object" string="Descartar"
+                        icon="fa-ban" invisible="state == 'dismissed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_absence_form" model="ir.ui.view">
+        <field name="name">olive.attendance.absence.form</field>
+        <field name="model">olive.attendance.absence</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_confirm" type="object" class="btn-danger"
+                            string="Confirmar ausencia" invisible="state == 'confirmed'"
+                            confirm="Confirmar la ausencia significa que ese dia se puede descontar de la nomina. ¿Seguro?"/>
+                    <button name="action_justify" type="object"
+                            string="Justificar" invisible="state == 'justified'"/>
+                    <button name="action_dismiss" type="object"
+                            string="Descartar" invisible="state == 'dismissed'"/>
+                    <button name="action_reopen" type="object"
+                            string="Dejar sin revisar" invisible="state == 'candidate'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="state != 'confirmed'">
+                        <b>Este dia se puede descontar de la nomina.</b>
+                        Es la unica accion del modulo que cuesta dinero. Si hay
+                        cualquier duda de que la persona si trabajo, mejor
+                        justificarla: no pagarle a alguien que trabajo es una falla
+                        mucho mas grave que pagarle un dia de mas.
+                    </div>
+                    <group>
+                        <group>
+                            <field name="employee_id"/>
+                            <field name="absence_date"/>
+                            <field name="department_id"/>
+                            <field name="reason"/>
+                        </group>
+                        <group string="Que vio el sistema">
+                            <field name="confidence" widget="percentage"/>
+                            <label for="peers_present" string="Companeros presentes"/>
+                            <div>
+                                <field name="peers_present" class="oe_inline"/> /
+                                <field name="peers_total" class="oe_inline"/>
+                            </div>
+                            <field name="gap_length"/>
+                            <field name="worked_before"/>
+                            <field name="worked_after"/>
+                        </group>
+                    </group>
+                    <group string="Por que se sospecha">
+                        <field name="signals" nolabel="1" readonly="1"/>
+                    </group>
+                    <group string="Nota">
+                        <field name="note" nolabel="1"
+                               placeholder="Que se averiguo y con quien..."/>
+                    </group>
+                    <group col="4">
+                        <field name="reviewed_by_uid"/>
+                        <field name="reviewed_date"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_olive_attendance_absence_search" model="ir.ui.view">
+        <field name="name">olive.attendance.absence.search</field>
+        <field name="model">olive.attendance.absence</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="employee_id"/>
+                <field name="department_id"/>
+                <filter name="f_candidate" string="Por revisar"
+                        domain="[('state', '=', 'candidate')]"/>
+                <filter name="f_confirmed" string="Confirmadas"
+                        domain="[('state', '=', 'confirmed')]"/>
+                <separator/>
+                <filter name="f_likely" string="Muy probables"
+                        domain="[('confidence', '&gt;=', 0.8)]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="g_employee" string="Empleado"
+                            context="{'group_by': 'employee_id'}"/>
+                    <filter name="g_department" string="Departamento"
+                            context="{'group_by': 'department_id'}"/>
+                    <filter name="g_state" string="Estado" context="{'group_by': 'state'}"/>
+                    <filter name="g_date" string="Dia" context="{'group_by': 'absence_date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_olive_absence_grid" model="ir.actions.client">
+        <field name="name">Control de asistencia</field>
+        <field name="tag">olive_absence_grid</field>
+    </record>
+
+    <record id="action_olive_attendance_absence" model="ir.actions.act_window">
+        <field name="name">Ausencias</field>
+        <field name="res_model">olive.attendance.absence</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_f_candidate': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay ausencias registradas</p>
+            <p>El sistema propone ausencias comparando a cada persona con sus
+               companeros y con su propio ritmo. Nunca descuenta solo: hasta que
+               alguien confirme, ninguna llega a la nomina.</p>
+        </field>
+    </record>
+
+</odoo>

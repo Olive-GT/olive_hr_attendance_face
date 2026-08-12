@@ -128,6 +128,16 @@ class ResCompany(models.Model):
     olive_face_expected_max_hours = fields.Float(
         default=12.0, string="Jornada esperada maxima (h)",
     )
+    # -- ausencias --------------------------------------------------------
+    olive_absence_min_confidence = fields.Float(
+        default=0.6, digits=(3, 2), string="Confianza minima para proponer",
+        help="Por debajo de esto el sistema NO propone la ausencia; el dia "
+             "aparece igual en la cuadricula, pero sin acusar a nadie.\n\n"
+             "Subirlo hace al sistema mas prudente y propone menos. Bajarlo "
+             "propone mas y da mas trabajo de revision. Ante la duda, subirlo: "
+             "no pagarle a alguien que trabajo es la falla mas cara.",
+    )
+
     olive_face_protect_validated = fields.Boolean(
         default=True, string="Proteger horas extra aprobadas",
     )

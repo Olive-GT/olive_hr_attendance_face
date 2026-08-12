@@ -14,3 +14,5 @@ access_sync_batch_manager,olive.attendance.sync.batch gestor,model_olive_attenda
 access_tombstone_manager,olive.attendance.tombstone gestor,model_olive_attendance_tombstone,olive_hr_attendance_face.group_face_manager,1,0,0,1
 access_anomaly_user,olive.attendance.anomaly operador,model_olive_attendance_anomaly,olive_hr_attendance_face.group_face_user,1,1,0,0
 access_anomaly_manager,olive.attendance.anomaly gestor,model_olive_attendance_anomaly,olive_hr_attendance_face.group_face_manager,1,1,1,1
+access_absence_user,olive.attendance.absence operador,model_olive_attendance_absence,olive_hr_attendance_face.group_face_user,1,1,0,0
+access_absence_manager,olive.attendance.absence gestor,model_olive_attendance_absence,olive_hr_attendance_face.group_face_manager,1,1,1,1

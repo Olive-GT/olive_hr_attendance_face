@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="olive_hr_attendance_face.AbsenceGrid">
+    <div class="o_olive_grid d-flex flex-column h-100 p-3">
+
+        <div t-if="state.phase === 'loading'" class="d-flex align-items-center gap-3 py-5">
+            <div class="spinner-border text-primary"/>
+            <span>Cargando la quincena...</span>
+        </div>
+
+        <div t-if="state.phase === 'error'" class="alert alert-danger">
+            <h4>No se pudo cargar</h4>
+            <p t-esc="state.error"/>
+        </div>
+
+        <t t-if="state.phase === 'ready'">
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                <h4 class="mb-0 me-2">Control de asistencia</h4>
+                <button class="btn btn-sm btn-secondary" t-on-click="() => this.shift(-1)">
+                    <i class="fa fa-chevron-left"/>
+                </button>
+                <span class="fw-bold">
+                    <t t-esc="state.dateFrom"/> — <t t-esc="state.dateTo"/>
+                </span>
+                <button class="btn btn-sm btn-secondary" t-on-click="() => this.shift(1)">
+                    <i class="fa fa-chevron-right"/>
+                </button>
+                <button class="btn btn-sm btn-primary ms-2"
+                        t-att-disabled="state.busy" t-on-click="runScan">
+                    <i class="fa fa-search me-1"/>Buscar ausencias
+                </button>
+                <div class="ms-auto d-flex gap-2">
+                    <span class="badge text-bg-danger">
+                        <t t-esc="totals.confirmed"/> confirmadas
+                    </span>
+                    <span class="badge text-bg-warning">
+                        <t t-esc="totals.pending"/> por revisar
+                    </span>
+                </div>
+            </div>
+
+            <div class="alert alert-info py-2 small mb-2">
+                <b>Nada aqui descuenta dinero por si solo.</b>
+                El sistema solo senala lo que le parece raro y explica por que.
+                Unicamente lo que marques como <b>Ausencia confirmada</b> llega a
+                la nomina. Hace clic en cualquier dia para revisarlo.
+            </div>
+
+            <div class="flex-grow-1 overflow-auto">
+                <table class="table table-sm table-bordered o_olive_matrix mb-0">
+                    <thead class="sticky-top">
+                        <tr>
+                            <th class="o_olive_name_col">Empleado</th>
+                            <th t-foreach="state.dates" t-as="day" t-key="day.date"
+                                class="text-center o_olive_day_col"
+                                t-att-class="dayClass(day)"
+                                t-att-title="day.present + ' de ' + day.total + ' vinieron'">
+                                <div class="small text-muted" t-esc="WEEKDAYS[day.weekday]"/>
+                                <div t-esc="day.day"/>
+                            </th>
+                            <th class="text-center">Vino</th>
+                            <th class="text-center">Faltó</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="state.rows" t-as="row" t-key="row.employee_id">
+                            <td class="o_olive_name_col">
+                                <div t-esc="row.name"/>
+                                <div t-if="row.department" class="text-muted small"
+                                     t-esc="row.department"/>
+                            </td>
+                            <td t-foreach="row.cells" t-as="cell" t-key="cell.date"
+                                class="text-center o_olive_cell"
+                                t-att-class="statusOf(cell).cls"
+                                t-att-title="statusOf(cell).label"
+                                t-on-click="() => this.select(row, cell)">
+                                <t t-esc="statusOf(cell).icon"/>
+                            </td>
+                            <td class="text-center fw-bold" t-esc="row.worked"/>
+                            <td class="text-center fw-bold"
+                                t-att-class="row.confirmed ? 'text-danger' : ''"
+                                t-esc="row.confirmed"/>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex gap-3 flex-wrap mt-2 small text-muted">
+                <span><span class="o_olive_key o_olive_worked"/> vino</span>
+                <span><span class="o_olive_key o_olive_candidate"/> posible ausencia</span>
+                <span><span class="o_olive_key o_olive_confirmed"/> confirmada</span>
+                <span><span class="o_olive_key o_olive_justified"/> justificada</span>
+                <span><span class="o_olive_key o_olive_excused"/> permiso</span>
+                <span><span class="o_olive_key o_olive_quiet"/> no vino, sin sospecha</span>
+            </div>
+
+            <!-- Panel de revision de un dia -->
+            <div t-if="state.selected" class="o_olive_review border rounded p-3 mt-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-0" t-esc="state.selected.row.name"/>
+                        <div class="text-muted" t-esc="state.selected.cell.date"/>
+                    </div>
+                    <button class="btn-close" t-on-click="close"/>
+                </div>
+
+                <div t-if="state.selected.cell.signals" class="mt-2">
+                    <b class="small">Por que el sistema sospecha</b>
+                    <pre class="small mb-0 mt-1" t-esc="state.selected.cell.signals"/>
+                </div>
+                <div t-else="" class="text-muted small mt-2">
+                    El sistema no propuso nada para este dia. Podes registrarlo
+                    igual si sabes que la persona falto.
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                    <button class="btn btn-danger btn-sm" t-att-disabled="state.busy"
+                            t-on-click="() => this.setState('confirmed', 'unjustified')">
+                        Confirmar ausencia (se descuenta)
+                    </button>
+                    <button class="btn btn-warning btn-sm" t-att-disabled="state.busy"
+                            t-on-click="() => this.setState('justified')">
+                        Justificada (no se descuenta)
+                    </button>
+                    <button class="btn btn-secondary btn-sm" t-att-disabled="state.busy"
+                            t-on-click="() => this.setState('dismissed', 'rest_day')">
+                        Era su dia de descanso
+                    </button>
+                    <button class="btn btn-secondary btn-sm" t-att-disabled="state.busy"
+                            t-on-click="() => this.setState('dismissed', 'kiosk_failure')">
+                        Si vino, fallo el kiosco
+                    </button>
+                    <button t-if="state.selected.cell.absence_id"
+                            class="btn btn-light btn-sm" t-att-disabled="state.busy"
+                            t-on-click="() => this.setState('candidate')">
+                        Volver a dejarla sin revisar
+                    </button>
+                </div>
+            </div>
+        </t>
+    </div>
+</t>
+
+</templates>

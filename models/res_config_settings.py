@@ -56,6 +56,8 @@ class ResConfigSettings(models.TransientModel):
         related="company_id.olive_face_day_cutoff_hour", readonly=False)
     olive_face_protect_validated = fields.Boolean(
         related="company_id.olive_face_protect_validated", readonly=False)
+    olive_absence_min_confidence = fields.Float(
+        related="company_id.olive_absence_min_confidence", readonly=False)
     olive_face_fold_inline = fields.Boolean(
         related="company_id.olive_face_fold_inline", readonly=False)
 

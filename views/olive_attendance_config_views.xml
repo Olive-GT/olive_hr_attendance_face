@@ -214,6 +214,8 @@
                                 <field name="olive_face_day_cutoff_hour"/></div>
                             <div class="row"><label for="olive_face_protect_validated" class="col-lg-6 o_light_label"/>
                                 <field name="olive_face_protect_validated"/></div>
+                            <div class="row"><label for="olive_absence_min_confidence" class="col-lg-6 o_light_label"/>
+                                <field name="olive_absence_min_confidence"/></div>
                             <div class="row"><label for="olive_face_fold_inline" class="col-lg-6 o_light_label"/>
                                 <field name="olive_face_fold_inline"/></div>
                         </div>

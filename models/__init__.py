@@ -7,6 +7,7 @@ from . import olive_attendance_sync_batch
 from . import olive_attendance_tombstone
 from . import olive_attendance_punch
 from . import olive_attendance_anomaly
+from . import olive_attendance_absence
 from . import olive_attendance_fold
 from . import hr_attendance
 from . import hr_employee

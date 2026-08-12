@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="cron_scan_absences" model="ir.cron">
+        <field name="name">Asistencia facial: buscar ausencias</field>
+        <field name="model_id" ref="model_olive_attendance_absence"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_scan()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active" eval="True"/>
+    </record>
+
     <record id="cron_fold_pending" model="ir.cron">
         <field name="name">Asistencia facial: doblar marcajes pendientes</field>
         <field name="model_id" ref="model_olive_attendance_punch"/>

@@ -7,7 +7,21 @@
               sequence="50"
               groups="olive_hr_attendance_face.group_face_user"/>
 
-    <!-- Operacion diaria -->
+    <!-- Operacion diaria. El control de asistencia va primero porque es la
+         pantalla que se usa todos los dias y la que alimenta la nomina. -->
+    <menuitem id="menu_olive_absence_grid"
+              name="Control de asistencia"
+              parent="menu_olive_face_root"
+              action="action_olive_absence_grid"
+              sequence="1"/>
+
+    <menuitem id="menu_olive_absence"
+              name="Ausencias"
+              parent="menu_olive_face_root"
+              action="action_olive_attendance_absence"
+              sequence="2"/>
+
+
     <menuitem id="menu_olive_face_review"
               name="Marcajes para revisar"
               parent="menu_olive_face_root"
