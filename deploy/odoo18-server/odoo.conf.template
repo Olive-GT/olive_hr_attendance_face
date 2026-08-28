@@ -1,0 +1,10 @@
+[options]
+db_host = False
+db_port = False
+db_user = odoo
+db_password = False
+default_productivity_apps = True
+admin_passwd = __ADMIN_PASSWD_HASH__
+addons_path = /usr/lib/python3/dist-packages/odoo/addons, /opt/odoo/custom, /opt/odoo/odoo_aro, /opt/odoo/odoo_aro/reporting-engine, /opt/odoo/odoo_nomina
+xmlrpc_interface = 127.0.0.1
+netrpc_interface = 127.0.0.1

@@ -1,0 +1,45 @@
+# <== Enter custom agent configurations in this file.
+# See https://cloud.google.com/stackdriver/docs/solutions/agents/ops-agent/configuration
+# for more details.
+metrics:
+  receivers:
+    hostmetrics:
+      type: hostmetrics
+      collection_interval: 300s
+
+  processors:
+    filter_out_heavy_metrics:
+      type: exclude_metrics
+      metrics_pattern:
+        # ----------------------------
+        # Procesos (altísima cardinalidad)
+        # ----------------------------
+        - agent.googleapis.com/processes/*
+        - agent.googleapis.com/process/*
+
+        # ----------------------------
+        # Disco y filesystem (por device/mount)
+        # ----------------------------
+        - agent.googleapis.com/disk/*
+        - agent.googleapis.com/filesystem/*
+
+        # ----------------------------
+        # Red (por interfaz / paquetes)
+        # ----------------------------
+        - agent.googleapis.com/network/*
+
+        # ----------------------------
+        # Métricas internas del agente (OTel / Fluent Bit)
+        # ----------------------------
+        - agent.googleapis.com/agent/*
+        - agent.googleapis.com/log_entry*
+        - agent.googleapis.com/request_count
+        - agent.googleapis.com/uptime
+        - otelcol_*
+        - fluentbit_*
+
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [hostmetrics]
+        processors: [filter_out_heavy_metrics]
