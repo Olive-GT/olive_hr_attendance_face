@@ -431,12 +431,26 @@ export class FaceKiosk extends Component {
             needs_review: top1.score < (s.review_threshold || 0.65) || suspect,
         };
 
-        await queue.push(punch);
+        // El bloqueo va ANTES de cualquier await. `evaluate` no espera a este
+        // metodo, asi que mientras la cola guardaba, los frames siguientes
+        // volvian a reconocer a la misma persona con la racha todavia llena:
+        // salian cuatro a seis marcajes en el mismo segundo.
+        this.cooldown.set(top1.id, Date.now() + (s.cooldown_seconds || 900) * 1000);
+        this.resetStreak();
+
+        try {
+            await queue.push(punch);
+        } catch (err) {
+            // No se guardo: sin liberar el bloqueo, la persona quedaria sin
+            // marcar quince minutos por un fallo que no es suyo.
+            // Nadie espera esta promesa: se avisa aqui o se pierde en silencio.
+            this.cooldown.delete(top1.id);
+            console.warn("olive_kiosk: no se pudo guardar el marcaje", err);
+            return;
+        }
         this.state.queued = await queue.count();
         this.state.todayCount += 1;
 
-        this.cooldown.set(top1.id, Date.now() + (s.cooldown_seconds || 900) * 1000);
-        this.resetStreak();
         this.state.greeting = {
             name: top1.name,
             score: top1.score,
