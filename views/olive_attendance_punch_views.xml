@@ -37,7 +37,7 @@
                     <button name="action_reject" type="object" string="Rechazar"
                             invisible="review_state != 'pending'"/>
                     <button name="action_force_fold" type="object" string="Reintentar doblado"
-                            invisible="state != 'queued'"
+                            invisible="state not in ('queued', 'error')"
                             groups="olive_hr_attendance_face.group_face_manager"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="queued,applied"/>
@@ -117,6 +117,18 @@
                 </group>
             </search>
         </field>
+    </record>
+
+    <!-- En lote: cuando un fallo del doblado se corrige, los marcajes que dejo
+         en error se recuperan todos de una vez y no de a uno. -->
+    <record id="action_olive_attendance_punch_refold_server" model="ir.actions.server">
+        <field name="name">Reintentar doblado</field>
+        <field name="model_id" ref="model_olive_attendance_punch"/>
+        <field name="binding_model_id" ref="model_olive_attendance_punch"/>
+        <field name="binding_view_types">list</field>
+        <field name="groups_id" eval="[(4, ref('olive_hr_attendance_face.group_face_manager'))]"/>
+        <field name="state">code</field>
+        <field name="code">records.filtered(lambda p: p.state in ("queued", "error")).action_force_fold()</field>
     </record>
 
     <record id="action_olive_attendance_punch" model="ir.actions.act_window">

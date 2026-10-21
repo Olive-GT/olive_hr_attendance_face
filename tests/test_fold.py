@@ -563,3 +563,29 @@ class TestFoldFirstLast(TestFold):
         self.assertEqual(attendances[0].check_in, self._at(10, 13))
         self.assertEqual(attendances[0].check_out, self._at(10, 23))
         self.assertEqual(attendances[1].check_in, self._at(11, 13))
+
+    def test_salida_con_fraccion_de_segundo(self):
+        """La salida real se guarda aunque las horas traigan microsegundos.
+
+        El kiosco corrige su reloj con un desfase con decimales, asi que todo
+        marcaje real trae fraccion de segundo. Odoo calcula el inicio del dia
+        sin limpiar microsegundos y, con entrada y salida de fracciones
+        distintas, intentaba crear dos registros de horas extra para la misma
+        fecha. La jornada entera se deshacia y la salida se perdia, siempre.
+        Los demas tests usan horas redondas y por eso no lo veian.
+        """
+        entrada = self._at(10, 13).replace(microsecond=406000)
+        salida = self._at(10, 23).replace(microsecond=632000)
+        # Como en la planta: la entrada se dobla sola en la manana y la salida
+        # llega horas despues y reconstruye el dia.
+        self._punch(entrada)
+        self._fold()
+        self._punch(salida)
+        self._fold()
+
+        attendance = self._attendances()
+        self.assertEqual(len(attendance), 1)
+        self.assertEqual(attendance.check_in, entrada.replace(microsecond=0))
+        self.assertEqual(attendance.check_out, salida.replace(microsecond=0))
+        self.assertFalse(attendance.olive_anomaly)
+        self.assertEqual(set(self._our_punches().mapped("state")), {"applied"})

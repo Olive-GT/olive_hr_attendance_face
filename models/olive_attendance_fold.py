@@ -42,6 +42,7 @@ from datetime import datetime, time, timedelta
 from pytz import timezone, utc
 
 from odoo import _, api, fields, models
+from odoo.tools import float_compare
 
 _logger = logging.getLogger(__name__)
 
@@ -385,17 +386,32 @@ class OliveAttendancePunch(models.Model):
         return dt_from, dt_to
 
     def _is_validated(self, attendance):
-        """Si la asistencia tiene horas extra ya aprobadas.
+        """Si una persona ya decidio sobre las horas extra de esta asistencia.
+
+        Lo que se protege es la decision humana, no el estado "aprobado". Con
+        la compania en `no_validation`, Odoo aprueba solo toda asistencia al
+        crearla, y una jornada simbolica de un minuto queda con -8 h
+        "validadas": tomarlo como aprobacion congelaba esa jornada y la salida
+        real que llegaba despues chocaba contra ella y se rechazaba.
 
         El campo cambia entre versiones y ediciones de Odoo, asi que se consulta
         con cuidado en vez de asumir que existe.
         """
-        for field_name in ("validated_overtime_hours", "overtime_status"):
-            if field_name in attendance._fields:
-                value = attendance[field_name]
-                if field_name == "overtime_status":
-                    return value == "approved"
-                return bool(value)
+        fields_ = attendance._fields
+        company = attendance.employee_id.company_id or self.env.company
+        mode = getattr(company, "attendance_overtime_validation", None)
+        if mode == "by_manager" and "overtime_status" in fields_:
+            return attendance.overtime_status == "approved"
+        if mode == "no_validation" and {
+                "validated_overtime_hours", "overtime_hours"} <= set(fields_):
+            # Sin validacion, la unica decision humana posible es haber
+            # corregido a mano las horas extra: Odoo las deja de recalcular
+            # cuando difieren de las calculadas, y aqui se respeta lo mismo.
+            return float_compare(
+                attendance.validated_overtime_hours, attendance.overtime_hours,
+                precision_digits=2) != 0
+        if "overtime_status" in fields_:
+            return attendance.overtime_status == "approved"
         return False
 
     # ==================================================================
@@ -505,7 +521,13 @@ class OliveAttendancePunch(models.Model):
             last_kept = punch.punch_time
             events.append({
                 "punch": punch,
-                "time": punch.punch_time,
+                # Sin fraccion de segundo. El desfase de reloj trae decimales y
+                # Odoo calcula el "inicio del dia" sin limpiar microsegundos: una
+                # entrada y una salida del mismo dia le dan dos inicios
+                # distintos, intenta crear dos registros de horas extra para la
+                # misma fecha y la unicidad tumba la jornada entera. Asi se
+                # perdio toda salida real desde el primer dia.
+                "time": punch.punch_time.replace(microsecond=0),
                 "direction": punch.direction,
             })
         if bursts:

@@ -211,9 +211,17 @@ class OliveAttendancePunch(models.Model):
         })
 
     def action_force_fold(self):
-        """Reintenta el doblado de estos marcajes (implementado en F2)."""
+        """Reintenta el doblado de estos marcajes, incluidos los que fallaron.
+
+        Un marcaje en error ya no lo toma nadie: el cron solo mira la cola. Si
+        no se lo devuelve a la cola, reintentar no hace nada y el marcaje queda
+        perdido aunque la causa del fallo ya este corregida.
+        """
         if not hasattr(self, "_fold_pending"):
             raise UserError(_("El doblado todavia no esta implementado (fase F2)."))
+        self.filtered(lambda p: p.state == "error").write({
+            "state": "queued", "fold_attempts": 0, "error_message": False,
+        })
         return self._fold_pending(punch_ids=self.ids)
 
     # ==================================================================
